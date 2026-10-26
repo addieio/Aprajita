@@ -1,5 +1,5 @@
 /*
-  Mochi Emotion + Weather Keychain + MPU-6050 Fall Detection & SOS
+  Aprajita + Weather Keychain + MPU-6050 Fall Detection & SOS
   Board: Seeed Studio XIAO ESP32-C6
   Display: 128x64 SSD1306 I2C OLED, address 0x3C
 
@@ -16,7 +16,7 @@
     MPU-6050 AD0 -> GND (Address 0x68) [or 3V3 for 0x69]
 
   GESTURE / BUTTON CONTROLS:
-    - Normal (Mochi faces): Press button -> Weather Dashboard
+    - Normal (Aprajita faces): Press button -> Weather Dashboard
     - Weather Dashboard: Press button -> Return to faces
     - Fall / Shock detected:
         * Big "SOS" screen with 5-second countdown & progress bar
@@ -25,7 +25,7 @@
     - Action Menu (after cancel):
         * Single Click: Switch between [ CALL 📞 ] and [ REPORT 📋 ]
         * Long Press (Hold >= 650ms): Select active option (Dial 112 / Log report)
-        * Double Click: Return directly to Mochi face animation!
+        * Double Click: Return directly to Aprajita face animation!
 
   Libraries needed in Arduino IDE:
     - Adafruit SSD1306
@@ -47,7 +47,7 @@
 #include <BLE2902.h>
 #include <ArduinoJson.h>
 #include <math.h>
-#include "mochi_emotions.h"
+#include "aprajita_emotions.h"
 
 // ================= USER & NETWORK SETTINGS =================
 const char* WIFI_SSID     = "YOUR_WIFI_SSID";
@@ -102,8 +102,8 @@ const double MANUAL_LONGITUDE = 77.2090;
 #define MPU_GYRO_DEG_THRESH      380.0f  // Rapid angular tumble velocity (deg/s)
 
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
-uint8_t frameBuffer[MOCHI_FRAME_BYTES];
-uint8_t deltaBuffer[MOCHI_FRAME_BYTES];
+uint8_t frameBuffer[APRAJITA_FRAME_BYTES];
+uint8_t deltaBuffer[APRAJITA_FRAME_BYTES];
 
 // ================= MPU-6050 DATA STRUCTURE =================
 struct MPUData {
@@ -526,7 +526,7 @@ class SosCommandCallbacks : public BLECharacteristicCallbacks {
     Serial.print(F("[BLE] RX SOS Command: "));
     Serial.println(rx);
     if (rx.indexOf("SOS") >= 0 || rx.indexOf("TRIGGER") >= 0) {
-      sendTwilioSms("EMERGENCY ALERT: Mobile App triggered Remote SOS on Mochi Keychain over Bluetooth! Live Location: " + getEmergencyLocationUrl());
+      sendTwilioSms("EMERGENCY ALERT: Mobile App triggered Remote SOS on Aprajita Keychain over Bluetooth! Live Location: " + getEmergencyLocationUrl());
     }
   }
 };
@@ -559,14 +559,14 @@ class ScreenCommandCallbacks : public BLECharacteristicCallbacks {
       emo.trim();
       emo.toUpperCase();
       selectedEmotionIndex = -1;
-      for (uint8_t i = 0; i < MOCHI_EMOTION_COUNT; i++) {
-        const char *name = (const char *)pgm_read_ptr(&MOCHI_EMOTIONS[i].name);
+      for (uint8_t i = 0; i < APRAJITA_EMOTION_COUNT; i++) {
+        const char *name = (const char *)pgm_read_ptr(&APRAJITA_EMOTIONS[i].name);
         if (String(name) == emo) {
           selectedEmotionIndex = i;
           break;
         }
       }
-      if (selectedEmotionIndex == -1 && emo.toInt() < (int)MOCHI_EMOTION_COUNT) {
+      if (selectedEmotionIndex == -1 && emo.toInt() < (int)APRAJITA_EMOTION_COUNT) {
         selectedEmotionIndex = emo.toInt();
       }
       currentScreen = SCREEN_FACES;
@@ -796,36 +796,36 @@ bool sendTwilioSms(const String &bodyText, const String &targetTo) {
 // ================= ANIMATION DATA DECODER =================
 // Decode one PackBits-RLE stream from flash into a 1024-byte buffer.
 void decodePackedFrame(uint32_t dataOffset, uint16_t packedLength, uint8_t *out) {
-  const uint8_t *src = MOCHI_PACKED_DATA + dataOffset;
+  const uint8_t *src = APRAJITA_PACKED_DATA + dataOffset;
   uint16_t srcPos = 0;
   uint16_t dstPos = 0;
 
-  while (srcPos < packedLength && dstPos < MOCHI_FRAME_BYTES) {
+  while (srcPos < packedLength && dstPos < APRAJITA_FRAME_BYTES) {
     uint8_t control = pgm_read_byte(src + srcPos++);
     uint16_t runLength = (control & 0x7F) + 1;
 
     if (control & 0x80) {
       if (srcPos >= packedLength) break;
       uint8_t value = pgm_read_byte(src + srcPos++);
-      while (runLength-- && dstPos < MOCHI_FRAME_BYTES) out[dstPos++] = value;
+      while (runLength-- && dstPos < APRAJITA_FRAME_BYTES) out[dstPos++] = value;
     } else {
-      while (runLength-- && srcPos < packedLength && dstPos < MOCHI_FRAME_BYTES) {
+      while (runLength-- && srcPos < packedLength && dstPos < APRAJITA_FRAME_BYTES) {
         out[dstPos++] = pgm_read_byte(src + srcPos++);
       }
     }
   }
 
-  while (dstPos < MOCHI_FRAME_BYTES) out[dstPos++] = 0;
+  while (dstPos < APRAJITA_FRAME_BYTES) out[dstPos++] = 0;
 }
 
 void showFrame(uint16_t frameIndex) {
-  uint32_t dataOffset = pgm_read_dword(&MOCHI_PACKED_FRAMES[frameIndex].offset);
-  uint16_t packedLength = pgm_read_word(&MOCHI_PACKED_FRAMES[frameIndex].length);
-  uint8_t isDelta = pgm_read_byte(&MOCHI_PACKED_FRAMES[frameIndex].isDelta);
+  uint32_t dataOffset = pgm_read_dword(&APRAJITA_PACKED_FRAMES[frameIndex].offset);
+  uint16_t packedLength = pgm_read_word(&APRAJITA_PACKED_FRAMES[frameIndex].length);
+  uint8_t isDelta = pgm_read_byte(&APRAJITA_PACKED_FRAMES[frameIndex].isDelta);
 
   if (isDelta) {
     decodePackedFrame(dataOffset, packedLength, deltaBuffer);
-    for (uint16_t i = 0; i < MOCHI_FRAME_BYTES; i++) frameBuffer[i] ^= deltaBuffer[i];
+    for (uint16_t i = 0; i < APRAJITA_FRAME_BYTES; i++) frameBuffer[i] ^= deltaBuffer[i];
   } else {
     // First frame of each clip is a complete bitmap and resets the delta chain.
     decodePackedFrame(dataOffset, packedLength, frameBuffer);
@@ -853,7 +853,7 @@ void triggerSosAlert(const String &reason) {
   display.println(F("SMS -> Papa"));
   display.display();
 
-  sendTwilioSms("EMERGENCY ALERT: " + reason + " on Mochi Keychain! Live Location: " + getEmergencyLocationUrl());
+  sendTwilioSms("EMERGENCY ALERT: " + reason + " on Aprajita Keychain! Live Location: " + getEmergencyLocationUrl());
 
   if (pCharSos) {
     pCharSos->setValue("TRIPLE_CLICK_SOS");
@@ -902,10 +902,10 @@ bool checkInputsDuringAnimation(uint16_t durationMs) {
 }
 
 void playEmotion(uint8_t emotionIndex) {
-  uint16_t first = pgm_read_word(&MOCHI_EMOTIONS[emotionIndex].firstFrame);
-  uint16_t count = pgm_read_word(&MOCHI_EMOTIONS[emotionIndex].frameCount);
-  uint16_t frameDelay = pgm_read_word(&MOCHI_EMOTIONS[emotionIndex].frameDelayMs);
-  const char *name = (const char *)pgm_read_ptr(&MOCHI_EMOTIONS[emotionIndex].name);
+  uint16_t first = pgm_read_word(&APRAJITA_EMOTIONS[emotionIndex].firstFrame);
+  uint16_t count = pgm_read_word(&APRAJITA_EMOTIONS[emotionIndex].frameCount);
+  uint16_t frameDelay = pgm_read_word(&APRAJITA_EMOTIONS[emotionIndex].frameDelayMs);
+  const char *name = (const char *)pgm_read_ptr(&APRAJITA_EMOTIONS[emotionIndex].name);
 
   Serial.print(F("Playing: "));
   Serial.print(name);
@@ -978,7 +978,7 @@ bool requestHttpJson(const char* host, const String &path, JsonDocument &doc, St
 
   client.print(String("GET ") + path + " HTTP/1.1\r\n" +
                "Host: " + host + "\r\n" +
-               "User-Agent: Mochi/1.0\r\n" +
+               "User-Agent: Aprajita/1.0\r\n" +
                "Connection: close\r\n\r\n");
        
   unsigned long startWait = millis();
@@ -1244,7 +1244,7 @@ void drawWeatherPage() {
   display.setTextColor(SSD1306_WHITE);
 
   if (!wx.valid) {
-    drawHeader("MOCHI WEATHER");
+    drawHeader("APRAJITA WEATHER");
     display.setCursor(0, 17); display.println(wx.error.length() ? wx.error : "No weather data");
     display.setCursor(0, 31); display.println("Check Wi-Fi / API");
     display.setCursor(0, 49); display.println("Press button to exit");
@@ -1291,7 +1291,7 @@ void exitWeatherDashboard() {
   currentScreen = SCREEN_FACES;
   display.clearDisplay();
   display.display();
-  Serial.println(F("Returning to Mochi face animations."));
+  Serial.println(F("Returning to Aprajita face animations."));
 }
 
 // Weather dashboard loop - single click advances to Night Watch
@@ -1417,7 +1417,7 @@ void toggleNightMode(bool enable) {
     delay(1000);
 
     // Initial activation SMS
-    sendTwilioSms("[NIGHT WATCH STARTED] User activated Night Watch Mode on Mochi Keychain. Tracking route. Initial GPS: " + getEmergencyLocationUrl());
+    sendTwilioSms("[NIGHT WATCH STARTED] User activated Night Watch Mode on Aprajita Keychain. Tracking route. Initial GPS: " + getEmergencyLocationUrl());
     if (pCharSos) {
       pCharSos->setValue("NIGHT_MODE_ON");
       pCharSos->notify();
@@ -1559,7 +1559,7 @@ void drawNotificationsPage() {
   display.display();
 }
 
-// Notifications loop - single click returns to Mochi animations
+// Notifications loop - single click returns to Aprajita animations
 void notificationsLoop() {
   if (currentScreen != SCREEN_NOTIFICATIONS) return;
 
@@ -1747,7 +1747,7 @@ void showCallScreen() {
   display.display();
 
   // Send Twilio SMS alert for Call action
-  sendTwilioSms("EMERGENCY CALL: User selected emergency voice call from Mochi Keychain! Please contact immediately. Location: " + getEmergencyLocationUrl());
+  sendTwilioSms("EMERGENCY CALL: User selected emergency voice call from Aprajita Keychain! Please contact immediately. Location: " + getEmergencyLocationUrl());
 
   unsigned long start = millis();
   flushButtonEvents();
@@ -1784,7 +1784,7 @@ void showReportScreen() {
   display.display();
 
   // Send Twilio SMS alert for Incident Report action
-  sendTwilioSms("INCIDENT REPORT: User logged a safety event on Mochi Keychain! Location: " + getEmergencyLocationUrl());
+  sendTwilioSms("INCIDENT REPORT: User logged a safety event on Aprajita Keychain! Location: " + getEmergencyLocationUrl());
 
   unsigned long start = millis();
   flushButtonEvents();
@@ -1843,7 +1843,7 @@ void runSosFlow() {
     drawSosTriggered();
 
     // Send Emergency Twilio SMS directly over Wi-Fi & notify companion app over BLE
-    sendTwilioSms("EMERGENCY ALERT: Severe Fall/Shock detected on Mochi Keychain! No response within 5-second countdown window! Live Location: " + getEmergencyLocationUrl());
+    sendTwilioSms("EMERGENCY ALERT: Severe Fall/Shock detected on Aprajita Keychain! No response within 5-second countdown window! Live Location: " + getEmergencyLocationUrl());
 
     unsigned long trigStart = millis();
     while (millis() - trigStart < 3500) {
@@ -1885,7 +1885,7 @@ void runSosFlow() {
       inMenu = false; // Finished action, return to animations
     }
     else if (act == ACT_DOUBLE_CLICK) {
-      Serial.println(F("[MENU] Double click -> Returning to Mochi face animation screen!"));
+      Serial.println(F("[MENU] Double click -> Returning to Aprajita face animation screen!"));
       inMenu = false;
     }
 
@@ -1904,7 +1904,7 @@ void runSosFlow() {
   currentScreen = SCREEN_FACES;
   display.clearDisplay();
   display.display();
-  Serial.println(F("[SOS] Returning to Mochi animation loop."));
+  Serial.println(F("[SOS] Returning to Aprajita animation loop."));
 }
 
 // ================= SETUP / MAIN LOOP =================
@@ -1931,7 +1931,7 @@ void setup() {
   display.setTextColor(SSD1306_WHITE);
   display.setCursor(0, 2);
   display.println(F("====================="));
-  display.println(F("  MOCHI AEGIS BOOT   "));
+  display.println(F("  APRAJITA AEGIS BOOT   "));
   display.println(F("====================="));
   display.print(F("SSID: ")); display.println(WIFI_SSID);
   display.println(F("Connecting Wi-Fi..."));
@@ -1939,15 +1939,15 @@ void setup() {
 
   // Mode: AP + Station (Simultaneous)
   // Station connects to internet (hotspot/router for Twilio SMS)
-  // SoftAP broadcasts SURAKSHA-MOCHI at 192.168.4.1 for direct phone connection
+  // SoftAP broadcasts SURAKSHA-APRAJITA at 192.168.4.1 for direct phone connection
   WiFi.mode(WIFI_AP_STA);
   WiFi.setAutoReconnect(true);
-  WiFi.softAP("SURAKSHA-MOCHI", "12345678");
+  WiFi.softAP("SURAKSHA-APRAJITA", "12345678");
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
   Serial.print(F("[WIFI] Connecting to Wi-Fi SSID: "));
   Serial.println(WIFI_SSID);
-  Serial.println(F("[WIFI] SoftAP Active: 'SURAKSHA-MOCHI' (IP: 192.168.4.1)"));
+  Serial.println(F("[WIFI] SoftAP Active: 'SURAKSHA-APRAJITA' (IP: 192.168.4.1)"));
 
   unsigned long wifiStart = millis();
   int progressTick = 0;
@@ -1992,7 +1992,7 @@ void setup() {
   } else {
     Serial.println(F("========================================"));
     Serial.println(F("[WIFI] Could not connect to station SSID within 15s."));
-    Serial.println(F("[WIFI] SoftAP IS ACTIVE: SSID 'SURAKSHA-MOCHI' -> IP 192.168.4.1"));
+    Serial.println(F("[WIFI] SoftAP IS ACTIVE: SSID 'SURAKSHA-APRAJITA' -> IP 192.168.4.1"));
     Serial.println(F("========================================"));
 
     display.println(F("====================="));
@@ -2000,7 +2000,7 @@ void setup() {
     display.println(F("====================="));
     display.print(F("Hotspot: ")); display.println(WIFI_SSID);
     display.println(F("SoftAP ALWAYS ON:"));
-    display.println(F("SSID: SURAKSHA-MOCHI"));
+    display.println(F("SSID: SURAKSHA-APRAJITA"));
     display.println(F("IP:   192.168.4.1"));
     display.display();
     delay(3000);
@@ -2032,7 +2032,7 @@ void setup() {
   server.on("/sos", HTTP_POST, []() {
     server.send(200, "application/json", "{\"sos\":true,\"message\":\"Triggered via Mobile Link\"}");
     // Dispatch real Twilio SMS immediately!
-    sendTwilioSms("EMERGENCY ALERT: Mobile App triggered Remote SOS on Mochi Keychain! Live Location: " + getEmergencyLocationUrl());
+    sendTwilioSms("EMERGENCY ALERT: Mobile App triggered Remote SOS on Aprajita Keychain! Live Location: " + getEmergencyLocationUrl());
   });
 
   server.on("/screen", HTTP_ANY, []() {
@@ -2061,14 +2061,14 @@ void setup() {
         selectedEmotionIndex = -1;
       } else {
         selectedEmotionIndex = -1;
-        for (uint8_t i = 0; i < MOCHI_EMOTION_COUNT; i++) {
-          const char *name = (const char *)pgm_read_ptr(&MOCHI_EMOTIONS[i].name);
+        for (uint8_t i = 0; i < APRAJITA_EMOTION_COUNT; i++) {
+          const char *name = (const char *)pgm_read_ptr(&APRAJITA_EMOTIONS[i].name);
           if (String(name) == emo) {
             selectedEmotionIndex = i;
             break;
           }
         }
-        if (selectedEmotionIndex == -1 && emo.toInt() < (int)MOCHI_EMOTION_COUNT) {
+        if (selectedEmotionIndex == -1 && emo.toInt() < (int)APRAJITA_EMOTION_COUNT) {
           selectedEmotionIndex = emo.toInt();
         }
       }
@@ -2079,10 +2079,10 @@ void setup() {
 
   server.enableCORS(true);
   server.begin();
-  Serial.println(F("[HTTP] Local Mochi Device Control Server active on port 80"));
+  Serial.println(F("[HTTP] Local Aprajita Device Control Server active on port 80"));
 
   Serial.println(F("======================================"));
-  Serial.println(F("   Mochi Emotion + Weather + Night Mode + BLE"));
+  Serial.println(F("   Aprajita + Weather + Night Mode + BLE"));
   Serial.println(F("======================================"));
   Serial.print(F("Button on GPIO ")); Serial.println(BUTTON_PIN);
   Serial.println(F("1-Click: Faces -> Weather -> Night Mode -> Device Info -> Faces"));
@@ -2112,14 +2112,14 @@ void loop() {
   }
 
   // Play locked emotion or cycle through all emotions
-  if (selectedEmotionIndex >= 0 && selectedEmotionIndex < (int)MOCHI_EMOTION_COUNT) {
+  if (selectedEmotionIndex >= 0 && selectedEmotionIndex < (int)APRAJITA_EMOTION_COUNT) {
     server.handleClient();
     checkNightModeBackground();
     if (currentScreen == SCREEN_FACES) {
       playEmotion(selectedEmotionIndex);
     }
   } else {
-    for (uint8_t emotion = 0; emotion < MOCHI_EMOTION_COUNT; emotion++) {
+    for (uint8_t emotion = 0; emotion < APRAJITA_EMOTION_COUNT; emotion++) {
       server.handleClient();
       checkNightModeBackground();
       if (currentScreen != SCREEN_FACES || selectedEmotionIndex != -1) break;

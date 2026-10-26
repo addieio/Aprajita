@@ -182,7 +182,7 @@ class HardwareService {
       Timer(const Duration(milliseconds: 8500), () {
         if (!completer.isCompleted) {
           _isScanning = false;
-          logTerminal('⚠️ Scan timed out. Ensure Mochi ESP32 is powered on & advertising.');
+          logTerminal('⚠️ Scan timed out. Ensure Aprajita ESP32 is powered on & advertising.');
           if (!_isBleConnected) {
             _emitTelemetry(_telemetry.copyWith(connectionState: DeviceConnectionState.disconnected));
           }

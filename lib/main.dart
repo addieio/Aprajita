@@ -109,7 +109,7 @@ class AprajitaApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Mochi Aegis - AI Safety Agent',
+      title: 'Aprajita - AI Safety Agent',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.darkTheme,
       home: AppShell(

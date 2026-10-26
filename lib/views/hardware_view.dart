@@ -220,7 +220,7 @@ class _HardwareViewState extends State<HardwareView> with SingleTickerProviderSt
               Text(
                 isConnected
                     ? '🟢 Paired with ESP32-C6 • Phone GPS streamed continuously • Hardware Wi-Fi ready for Twilio'
-                    : 'Pair your phone with Mochi ESP32 over Bluetooth to stream phone GPS & trigger SOS.',
+                    : 'Pair your phone with Aprajita ESP32 over Bluetooth to stream phone GPS & trigger SOS.',
                 style: const TextStyle(fontSize: 11.5, color: AppTheme.textSecondary),
               ),
               const SizedBox(height: 14),

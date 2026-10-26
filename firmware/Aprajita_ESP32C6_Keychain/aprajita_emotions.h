@@ -1,19 +1,19 @@
 // Generated monochrome animations from all 18 emote-folder GIFs in the supplied reference archive.
 // 128x64, MSB-first bitmap rows. Each clip starts with a keyframe; subsequent frames are XOR-delta RLE.
-#ifndef MOCHI_EMOTIONS_H
-#define MOCHI_EMOTIONS_H
+#ifndef APRAJITA_EMOTIONS_H
+#define APRAJITA_EMOTIONS_H
 
 #include <Arduino.h>
 #include <pgmspace.h>
 
-#define MOCHI_FRAME_WIDTH 128
-#define MOCHI_FRAME_HEIGHT 64
-#define MOCHI_FRAME_BYTES 1024
+#define APRAJITA_FRAME_WIDTH 128
+#define APRAJITA_FRAME_HEIGHT 64
+#define APRAJITA_FRAME_BYTES 1024
 
-struct MochiPackedFrameRef { uint32_t offset; uint16_t length; uint8_t isDelta; };
-struct MochiEmotionClip { const char *name; uint16_t firstFrame; uint16_t frameCount; uint16_t frameDelayMs; };
+struct AprajitaPackedFrameRef { uint32_t offset; uint16_t length; uint8_t isDelta; };
+struct AprajitaEmotionClip { const char *name; uint16_t firstFrame; uint16_t frameCount; uint16_t frameDelayMs; };
 
-const uint8_t MOCHI_PACKED_DATA[] PROGMEM = {
+const uint8_t APRAJITA_PACKED_DATA[] PROGMEM = {
   0xEA, 0x00, 0x01, 0x3F, 0xF8, 0x85, 0x00, 0x01, 0x3F, 0xFE, 0x84, 0x00, 0x02, 0x01, 0xFF, 0xFC,
   0x85, 0x00, 0x01, 0x7F, 0xFF, 0x84, 0x00, 0x02, 0x07, 0xFF, 0xFF, 0x84, 0x00, 0x03, 0x03, 0xFF,
   0xFF, 0xC0, 0x83, 0x00, 0x03, 0x0F, 0xFF, 0xFF, 0x80, 0x83, 0x00, 0x03, 0x07, 0xFF, 0xFF, 0xF0,
@@ -18712,7 +18712,7 @@ const uint8_t MOCHI_PACKED_DATA[] PROGMEM = {
   0xFF, 0x00, 0xF6, 0x00,
 };
 
-const MochiPackedFrameRef MOCHI_PACKED_FRAMES[] PROGMEM = {
+const AprajitaPackedFrameRef APRAJITA_PACKED_FRAMES[] PROGMEM = {
   {0UL, 560, 0},
   {560UL, 48, 1},
   {608UL, 62, 1},
@@ -20098,7 +20098,7 @@ const MochiPackedFrameRef MOCHI_PACKED_FRAMES[] PROGMEM = {
   {299053UL, 71, 1},
 };
 
-const MochiEmotionClip MOCHI_EMOTIONS[] PROGMEM = {
+const AprajitaEmotionClip APRAJITA_EMOTIONS[] PROGMEM = {
   {"HAPPY", 0, 75, 67},
   {"HAPPY 2", 75, 75, 67},
   {"LAUGH", 150, 75, 67},
@@ -20119,7 +20119,7 @@ const MochiEmotionClip MOCHI_EMOTIONS[] PROGMEM = {
   {"INTRO", 1278, 105, 67},
 };
 
-#define MOCHI_EMOTION_COUNT (sizeof(MOCHI_EMOTIONS) / sizeof(MOCHI_EMOTIONS[0]))
-#define MOCHI_TOTAL_FRAME_COUNT 1383
-#define MOCHI_PACKED_DATA_BYTES 299124UL
-#endif // MOCHI_EMOTIONS_H
+#define APRAJITA_EMOTION_COUNT (sizeof(APRAJITA_EMOTIONS) / sizeof(APRAJITA_EMOTIONS[0]))
+#define APRAJITA_TOTAL_FRAME_COUNT 1383
+#define APRAJITA_PACKED_DATA_BYTES 299124UL
+#endif // APRAJITA_EMOTIONS_H

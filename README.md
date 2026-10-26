@@ -1,6 +1,6 @@
-# Mochi Aegis — AI-Powered Lifestyle Companion & Autonomous Personal Guardian
+# Aprajita — AI-Powered Lifestyle Companion & Autonomous Personal Guardian
 
-Mochi Aegis is a hybrid hardware-and-mobile personal safety system designed for everyone—daily commuters, solo runners, students, shift workers, and elderly family members. It transforms personal safety from an awkward, reactive panic button into an expressive Everyday Carry (EDC) lifestyle smart keychain.
+Aprajita is a hybrid hardware-and-mobile personal safety system designed for everyone—daily commuters, solo runners, students, shift workers, and elderly family members. It transforms personal safety from an awkward, reactive panic button into an expressive Everyday Carry (EDC) lifestyle smart keychain.
 
 Beneath its animated round display and lifestyle personas lies an autonomous defense architecture: physical multi-click interrupt triggers, low-latency BLE telemetry, peer-to-peer distress meshing, and an intelligent safety companion grounded in **Vectorize Hindsight** episodic long-term memory.
 
@@ -8,11 +8,11 @@ Beneath its animated round display and lifestyle personas lies an autonomous def
 
 ## 🏛️ System Architecture
 
-Mochi operates across two interconnected domains: a physical smart keychain wearable and a mobile smartphone companion application.
+Aprajita operates across two interconnected domains: a physical smart keychain wearable and a mobile smartphone companion application.
 
 ```mermaid
 graph TD
-    subgraph "Physical Wearable (Mochi Smart Keychain)"
+    subgraph "Physical Wearable (Aprajita Smart Keychain)"
         BTN[Tactile Action Button] -->|Single Click| MODE[Cycle Personas & Weather]
         BTN -->|Long Press| NIGHT[Toggle Night Watch Mode]
         BTN -->|Rapid Triple-Click| HARD_SOS[Immediate Silent SOS]
@@ -40,7 +40,7 @@ graph TD
 ## ⚡ Core Subsystems & Technical Capabilities
 
 ### 1. Episodic Long-Term Memory Engine (Vectorize Hindsight)
-Standard LLMs suffer from severe amnesia and cannot reliably manage safety check-ins or emergency protocols. Mochi integrates **Vectorize Hindsight** to give the companion long-term episodic vector memory across three primitives:
+Standard LLMs suffer from severe amnesia and cannot reliably manage safety check-ins or emergency protocols. Aprajita integrates **Vectorize Hindsight** to give the companion long-term episodic vector memory across three primitives:
 * **Retain**: Every check-in preference, route corridor, emergency contact priority, and past incident timeline is ingested into the user's private episodic memory bank.
 * **Recall**: Queries vector memory before answering, strictly grounding the agent in verified facts (preventing hallucination of contact names, phone numbers, or escalation rules).
 * **Reflect**: Synthesizes cross-temporal longitudinal patterns across incidents and device diagnostics, preventing repetitive troubleshooting suggestions when hardware connection drops occur.
@@ -108,9 +108,9 @@ Standard LLMs suffer from severe amnesia and cannot reliably manage safety check
 │   │   │   └── settings_view.dart        # API keys, bank IDs, and threshold settings
 │   │   └── widgets/                      # Reusable UI components & dialogs
 │   └── firmware/                         # Microcontroller Firmware
-│       └── Mochi_ESP32C6_Emotion_Keychain/
-│           ├── Mochi_ESP32C6_Emotion_Keychain.ino # Production ESP32-C6 firmware
-│           ├── mochi_emotions.h          # Bitmap graphics & animation frames
+│       └── Aprajita_ESP32C6_Keychain/
+│           ├── Aprajita_ESP32C6_Keychain.ino # Production ESP32-C6 firmware
+│           ├── aprajita_emotions.h          # Bitmap graphics & animation frames
 │           └── partitions.csv            # Extended app partition scheme
 └── Aprajita_Companion_App.apk            # Pre-compiled Android release build
 ```

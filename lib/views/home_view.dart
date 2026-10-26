@@ -581,7 +581,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                       _buildReadinessCard(hw, contacts, loc),
                       const SizedBox(height: 14),
 
-                      // MOCHI AEGIS AI AGENT & SCREEN CUSTOMIZER BANNER
+                      // APRAJITA AEGIS AI AGENT & SCREEN CUSTOMIZER BANNER
                       _buildAiAndGifLauncherBanner(),
                       const SizedBox(height: 14),
 
@@ -1013,7 +1013,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: const [
                       Text(
-                        'Mochi Aegis AI Agent',
+                        'Aprajita AI Agent',
                         style: TextStyle(
                           fontSize: 13.5,
                           fontWeight: FontWeight.w800,

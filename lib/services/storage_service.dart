@@ -251,7 +251,7 @@ class StorageService {
     if (raw == null || raw.isEmpty) {
       return {
         'apiKey': '',
-        'bankId': 'mochi_safety',
+        'bankId': 'aprajita_safety',
         'baseUrl': 'https://api.hindsight.vectorize.io',
         'enabled': 'false',
       };
@@ -261,7 +261,7 @@ class StorageService {
     } catch (_) {
       return {
         'apiKey': '',
-        'bankId': 'mochi_safety',
+        'bankId': 'aprajita_safety',
         'baseUrl': 'https://api.hindsight.vectorize.io',
         'enabled': 'false',
       };
@@ -325,7 +325,7 @@ class StorageService {
   static const String _keyGifShowBattery = 'aprajita_gif_show_battery';
 
   String getCustomGifPreset() {
-    return _prefs.getString(_keyGifPreset) ?? 'mochi_happy';
+    return _prefs.getString(_keyGifPreset) ?? 'aprajita_happy';
   }
 
   Future<void> setCustomGifPreset(String preset) async {

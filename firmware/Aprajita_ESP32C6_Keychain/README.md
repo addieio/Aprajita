@@ -1,7 +1,7 @@
-# Mochi Emotion, Weather & Safety Keychain — XIAO ESP32-C6 + OLED + MPU-6050
+# Aprajita, Weather & Safety Keychain — XIAO ESP32-C6 + OLED + MPU-6050
 
 This Arduino project features:
-- **18 Animated Emotion Clips** for Mochi on a 128×64 SSD1306 OLED display.
+- **18 Animated Emotion Clips** for Aprajita on a 128×64 SSD1306 OLED display.
 - **Single-Screen Weather Dashboard** with real-time temperature, condition, feels-like, humidity, and weather icon.
 - **Notifications Demo Screen** (3rd screen) displaying incoming notifications and system link status.
 - **MPU-6050 Fall & Quick Movement Detection**: Automatically senses drops, impacts, and sudden environmental shocks.
@@ -34,7 +34,7 @@ This Arduino project features:
 ## Screen & Button Navigation Flow
 
 ```
-   [ Mochi Face Animations ]
+   [ Aprajita Face Animations ]
               │ (Click)
               ▼
     [ Weather Dashboard ]
@@ -43,10 +43,10 @@ This Arduino project features:
   [ Notifications Demo Page ]
               │ (Click)
               ▼
-   [ Mochi Face Animations ]
+   [ Aprajita Face Animations ]
 ```
 
-### 1. During Normal Animations (Mochi Faces)
+### 1. During Normal Animations (Aprajita Faces)
 - **Single Press:** Opens the **Weather Dashboard**.
 - **Fall / Rapid Shock Detected:** Instantly launches **Big SOS Countdown**.
 
@@ -56,7 +56,7 @@ This Arduino project features:
 
 ### 3. Notifications Demo Page
 - Displays 3 notifications (`Mom: Reach home safe?`, `BLE: Paired & Armed`, `Twilio: SMS Online`).
-- **Single Press:** Returns to **Mochi Face Animations**.
+- **Single Press:** Returns to **Aprajita Face Animations**.
 
 ### 4. SOS Countdown (5 Seconds)
 - Screen shows big **SOS**, "FALL DETECTED!", countdown seconds (5s → 0s), and a progress bar.
@@ -69,7 +69,7 @@ This Arduino project features:
 - Two interactive cards: **CALL** (📞) and **REPORT** (📋).
 - **Single Click:** Switch / toggle between **CALL** and **REPORT**.
 - **Long Press (Hold ≥ 0.65s):** Select and trigger the highlighted action (Sends Twilio SMS alert).
-- **Double Click:** Return directly to the **Mochi Face Animations**!
+- **Double Click:** Return directly to the **Aprajita Face Animations**!
 
 ---
 
@@ -94,7 +94,7 @@ The updated Android companion app is located at:
 ---
 
 ## Uploading the Code
-1. Open [`Mochi_ESP32C6_Emotion_Keychain.ino`](file:///c:/Users/adity/OneDrive/Documents/IIITDWOMENS/Mochi_ESP32C6_Emotion_Keychain/Mochi_ESP32C6_Emotion_Keychain.ino) in Arduino IDE.
+1. Open [`Aprajita_ESP32C6_Keychain.ino`](file:///c:/Users/adity/OneDrive/Documents/IIITDWOMENS/Aprajita_ESP32C6_Keychain/Aprajita_ESP32C6_Keychain.ino) in Arduino IDE.
 2. Select Board: **Seeed Studio XIAO ESP32C6**.
 3. Select your device's COM port.
 4. Click **Upload**.

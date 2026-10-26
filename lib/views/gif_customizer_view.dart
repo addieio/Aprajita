@@ -47,56 +47,56 @@ class _GifCustomizerViewState extends State<GifCustomizerView> {
 
   final List<_PresetAnimation> _presets = const [
     _PresetAnimation(
-      id: 'mochi_happy',
-      title: 'Mochi Classic Happy (HAPPY)',
+      id: 'aprajita_happy',
+      title: 'Aprajita Classic Happy (HAPPY)',
       description: 'Default cheerful blinking expression synced to hardware',
       icon: '😊',
       gifUrl: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM3hicmFpbnk1eXl4dmt2OGd1NDJ5NHF2OGdtNGF6c2V4Ymt6ZzM5dCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9cw/MDJ9IbxxvDUQM/giphy.gif',
     ),
     _PresetAnimation(
-      id: 'mochi_laugh',
-      title: 'Mochi Joyful Laugh (LAUGH)',
-      description: 'Big laughing celebration face on Mochi OLED',
+      id: 'aprajita_laugh',
+      title: 'Aprajita Joyful Laugh (LAUGH)',
+      description: 'Big laughing celebration face on Aprajita Display',
       icon: '😂',
       gifUrl: 'https://media.giphy.com/media/ICOgUNjpvO0PC/giphy.gif',
     ),
     _PresetAnimation(
-      id: 'mochi_excited',
-      title: 'Mochi High Energy (EXCITED)',
+      id: 'aprajita_excited',
+      title: 'Aprajita High Energy (EXCITED)',
       description: 'Bouncing energetic star eyes face',
       icon: '🤩',
       gifUrl: 'https://media.giphy.com/media/artj92V8o75VPL7AeQ/giphy.gif',
     ),
     _PresetAnimation(
-      id: 'mochi_alert',
-      title: 'Mochi Guardian Shield (DETERMINED)',
+      id: 'aprajita_alert',
+      title: 'Aprajita Guardian Shield (DETERMINED)',
       description: 'Vigilant shield mode for high-risk zones',
       icon: '🛡️',
       gifUrl: 'https://media.giphy.com/media/3o7aD2saalBwwftBIY/giphy.gif',
     ),
     _PresetAnimation(
-      id: 'mochi_love',
-      title: 'Mochi Heart Eyes (LOVE)',
+      id: 'aprajita_love',
+      title: 'Aprajita Heart Eyes (LOVE)',
       description: 'Heart-filled warm companion expression',
       icon: '❤️',
       gifUrl: 'https://media.giphy.com/media/3o7TKoWXm3okO1kgHC/giphy.gif',
     ),
     _PresetAnimation(
-      id: 'mochi_sleepy',
-      title: 'Mochi Night Commute (SLEEPY)',
+      id: 'aprajita_sleepy',
+      title: 'Aprajita Night Commute (SLEEPY)',
       description: 'Gentle calm face for late-night travels',
       icon: '😴',
       gifUrl: 'https://media.giphy.com/media/mguPrVJAnEHIY/giphy.gif',
     ),
     _PresetAnimation(
-      id: 'mochi_music',
-      title: 'Mochi Cyber Beats (MUSIC)',
+      id: 'aprajita_music',
+      title: 'Aprajita Cyber Beats (MUSIC)',
       description: 'Head-bobbing rhythmic audio pulse animation',
       icon: '🎵',
       gifUrl: 'https://media.giphy.com/media/blSTtZehjAZ8I/giphy.gif',
     ),
     _PresetAnimation(
-      id: 'mochi_cycle',
+      id: 'aprajita_cycle',
       title: 'Cycle All 18 Emotions (CYCLE)',
       description: 'Rotates through all 18 emotion animations on loop',
       icon: '🔄',
@@ -133,14 +133,14 @@ class _GifCustomizerViewState extends State<GifCustomizerView> {
     // Map preset to hardware emotion name
     String hardwareEmotion = 'HAPPY';
     switch (_selectedPreset) {
-      case 'mochi_happy': hardwareEmotion = 'HAPPY'; break;
-      case 'mochi_laugh': hardwareEmotion = 'LAUGH'; break;
-      case 'mochi_excited': hardwareEmotion = 'EXCITED 2'; break;
-      case 'mochi_alert': hardwareEmotion = 'DETERMINED'; break;
-      case 'mochi_love': hardwareEmotion = 'LOVE'; break;
-      case 'mochi_sleepy': hardwareEmotion = 'SLEEPY'; break;
-      case 'mochi_music': hardwareEmotion = 'MUSIC'; break;
-      case 'mochi_cycle': hardwareEmotion = 'CYCLE'; break;
+      case 'aprajita_happy': hardwareEmotion = 'HAPPY'; break;
+      case 'aprajita_laugh': hardwareEmotion = 'LAUGH'; break;
+      case 'aprajita_excited': hardwareEmotion = 'EXCITED 2'; break;
+      case 'aprajita_alert': hardwareEmotion = 'DETERMINED'; break;
+      case 'aprajita_love': hardwareEmotion = 'LOVE'; break;
+      case 'aprajita_sleepy': hardwareEmotion = 'SLEEPY'; break;
+      case 'aprajita_music': hardwareEmotion = 'MUSIC'; break;
+      case 'aprajita_cycle': hardwareEmotion = 'CYCLE'; break;
       default: hardwareEmotion = 'HAPPY';
     }
 
@@ -148,15 +148,15 @@ class _GifCustomizerViewState extends State<GifCustomizerView> {
     final ok = await widget.hardwareService.syncEmotionToEsp32(hardwareEmotion);
 
     widget.hardwareService.logTerminal(
-      'TX -> Synced to Mochi Hardware: Emotion $hardwareEmotion | FPS: $_fps | 24H: $_clock24',
+      'TX -> Synced to Aprajita Hardware: Emotion $hardwareEmotion | FPS: $_fps | 24H: $_clock24',
     );
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(ok
-              ? '✨ "$hardwareEmotion" Emotion synced live to Mochi Screen!'
-              : 'Saved! When Mochi connects, "$hardwareEmotion" will display.'),
+              ? '✨ "$hardwareEmotion" Emotion synced live to Aprajita Screen!'
+              : 'Saved! When Aprajita connects, "$hardwareEmotion" will display.'),
           backgroundColor: AppTheme.emerald,
         ),
       );
@@ -183,7 +183,7 @@ class _GifCustomizerViewState extends State<GifCustomizerView> {
         backgroundColor: AppTheme.bgDark,
         elevation: 0,
         title: const Text(
-          'Mochi Screen & GIF Customizer',
+          'Aprajita Screen & GIF Customizer',
           style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
         ),
       ),
@@ -499,7 +499,7 @@ class _GifCustomizerViewState extends State<GifCustomizerView> {
               child: ElevatedButton.icon(
                 icon: const Icon(Icons.sync_rounded),
                 label: const Text(
-                  'APPLY TO APP & SYNC TO MOCHI',
+                  'APPLY TO APP & SYNC TO APRAJITA',
                   style: TextStyle(fontWeight: FontWeight.w800, letterSpacing: 0.5),
                 ),
                 style: ElevatedButton.styleFrom(

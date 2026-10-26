@@ -123,7 +123,7 @@ Strict Memory Grounding & Safety Watch Instructions:
 
     final answer = await chat(
       systemPrompt:
-          'You are a Hardware Support Specialist for the Mochi ESP32-C6 Emotion Keychain and Aprajita Companion app. '
+          'You are a Hardware Support Specialist for the Aprajita ESP32-C6 Emotion Keychain and Aprajita Companion app. '
           'Use the reflected past maintenance history to avoid recommending troubleshooting steps that already failed or were previously completed.',
       userMessage: issueDescription,
       recalledMemories: memories,

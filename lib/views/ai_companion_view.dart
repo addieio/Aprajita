@@ -6,6 +6,7 @@ import '../services/hindsight_service.dart';
 import '../services/storage_service.dart';
 import '../services/twilio_service.dart';
 import '../services/location_service.dart';
+import '../models/contact_model.dart';
 import '../theme/app_theme.dart';
 
 class AiCompanionView extends StatefulWidget {
@@ -78,7 +79,7 @@ class _AiCompanionViewState extends State<AiCompanionView> {
   void _loadInitialGreeting() {
     _messages.add(
       _ChatMessage(
-        text: 'Hello Aditya. I am your Mochi Aegis Safety Companion powered by Vectorize Hindsight episodic memory.\n\n'
+        text: 'Hello Aditya. I am your Aprajita Safety Companion powered by Vectorize Hindsight episodic memory.\n\n'
             'Tell me when to check on you (e.g. "Check on me in 10 seconds" or "Remind me in 15 mins"), and I will watch over you. '
             'If you do not acknowledge safety, I will automatically escalate to your emergency contacts.',
         isUser: false,
@@ -294,7 +295,7 @@ class _AiCompanionViewState extends State<AiCompanionView> {
     // 3. Dispatch SMS alert
     final smsResult = await widget.twilioService.sendEmergencySms(
       recipientPhone: targetPhone,
-      senderName: 'Mochi Aegis Safety Escalation',
+      senderName: 'Aprajita Safety Escalation',
       locationUrl: mapUrl,
       latitude: loc.lat,
       longitude: loc.lng,
@@ -602,7 +603,7 @@ class _AiCompanionViewState extends State<AiCompanionView> {
                 ),
                 const SizedBox(width: 8),
                 const Text(
-                  'Mochi Aegis AI Safety Agent',
+                  'Aprajita AI Safety Agent',
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
               ],
