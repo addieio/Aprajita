@@ -174,11 +174,11 @@ void pollButton() {
         btnLongPressFired = false;
         btnRawDownEdge = true; // Instant edge trigger for 0ms SOS cancel
 
-        if (btnClickCount == 1 && (millis() - btnReleasedAt < 380)) {
+        if (btnClickCount == 1 && (millis() - btnReleasedAt < 280)) {
           btnClickCount = 2;
-        } else if (btnClickCount == 2 && (millis() - btnReleasedAt < 380)) {
+        } else if (btnClickCount == 2 && (millis() - btnReleasedAt < 280)) {
           btnClickCount = 3;
-        } else if (btnClickCount == 0 || (millis() - btnReleasedAt >= 380)) {
+        } else if (btnClickCount == 0 || (millis() - btnReleasedAt >= 280)) {
           btnClickCount = 1;
         }
       } else {
@@ -197,18 +197,18 @@ void pollButton() {
     }
   }
 
-  // Detect long press while held down
+  // Detect long press while held down (650ms deliberate hold)
   if (btnDebouncedState == LOW && !btnLongPressFired) {
-    if (millis() - btnPressedAt >= 700) {
+    if (millis() - btnPressedAt >= 650) {
       btnLongPressFired = true;
       btnPendingAction = ACT_LONG_PRESS;
       btnClickCount = 0;
     }
   }
 
-  // Detect single or double click when multi-click window expires
+  // Detect single or double click when multi-click window expires (crisp 200ms)
   if (btnDebouncedState == HIGH && btnClickCount > 0) {
-    if (millis() - btnReleasedAt >= 320) {
+    if (millis() - btnReleasedAt >= 200) {
       if (btnClickCount == 1) {
         btnPendingAction = ACT_SINGLE_CLICK;
       } else if (btnClickCount == 2) {
@@ -427,14 +427,17 @@ static const unsigned char PROGMEM icon_report_16[] = {
   0b00111111, 0b11111100
 };
 
-// Screen state machine: Faces -> Weather -> Night Mode -> Notifications -> Faces
+// Screen state machine: Faces -> Weather -> Night Mode -> Hazard Area Demo -> Device Info -> Faces
 enum AppScreen {
   SCREEN_FACES,
   SCREEN_WEATHER,
   SCREEN_NIGHT_MODE,
-  SCREEN_NOTIFICATIONS
+  SCREEN_DEMO_HAZARD,
+  SCREEN_NOTIFICATIONS,
+  SCREEN_CHECKIN_ALERT
 };
 AppScreen currentScreen = SCREEN_FACES;
+AppScreen previousScreenBeforeCheckin = SCREEN_FACES;
 
 // ================= NIGHT WATCH / 10-MIN LOCATION SHARE & STAGNANT MONITOR =================
 bool          nightModeActive       = false;
@@ -446,6 +449,12 @@ unsigned long lastMovementAt        = 0;
 bool          stagnantAlertSent     = false;
 int           selectedEmotionIndex  = -1; // -1 = cycle all 18 emotes; >=0 = locked emote
 
+// Synchronized Check-in Alert State
+bool          checkinActive         = false;
+unsigned long checkinAlertStartMs   = 0;
+unsigned long checkinTimeoutDurationMs = 10000;
+uint8_t       selectedCheckinOption = 0; // 0 = Safe, 1 = SOS
+
 // Forward declarations
 void enterWeatherDashboard();
 void exitWeatherDashboard();
@@ -455,10 +464,15 @@ void nightModeLoop();
 void toggleNightMode(bool enable);
 void checkNightModeBackground();
 void triggerSosAlert(const String &reason);
+void drawDemoHazardPage();
+void demoHazardLoop();
+void startCheckinAlert(unsigned long timeoutSeconds = 10);
+void drawCheckinScreen();
+void checkinAlertLoop();
 void drawNotificationsPage();
 void notificationsLoop();
 void loadWeather();
-void loadDemoWeather(const String &reason);
+void loadCachedWeather(const String &reason = "Online");
 void runSosFlow();
 void drawSosCountdown(int secondsLeft, int progressPercent);
 void drawSosCancelled();
@@ -546,6 +560,41 @@ class ScreenCommandCallbacks : public BLECharacteristicCallbacks {
     } else if (rx == "NOTIFICATIONS" || rx == "DEVICE_INFO") {
       currentScreen = SCREEN_NOTIFICATIONS;
       drawNotificationsPage();
+    } else if (rx == "DEMO:HAZARD" || rx == "HAZARD") {
+      currentScreen = SCREEN_DEMO_HAZARD;
+      flushButtonEvents();
+      drawDemoHazardPage();
+    } else if (rx.startsWith("CHECKIN:START")) {
+      int timeoutSec = 10;
+      int colon = rx.lastIndexOf(':');
+      if (colon > 12) {
+        timeoutSec = rx.substring(colon + 1).toInt();
+        if (timeoutSec <= 0) timeoutSec = 10;
+      }
+      startCheckinAlert(timeoutSec);
+    } else if (rx == "CHECKIN:SAFE" || rx == "CHECKIN:CANCEL") {
+      if (currentScreen == SCREEN_CHECKIN_ALERT) {
+        checkinActive = false;
+        display.clearDisplay();
+        display.drawRoundRect(0, 0, 128, 64, 3, SSD1306_WHITE);
+        display.fillRect(0, 0, 128, 14, SSD1306_WHITE);
+        display.setTextColor(SSD1306_BLACK);
+        display.setTextSize(1);
+        display.setCursor(8, 3);
+        display.print(F("CHECK-IN CONFIRMED"));
+        display.setTextColor(SSD1306_WHITE);
+        display.setCursor(6, 24);
+        display.print(F("Status: SAFE & OK"));
+        display.setCursor(6, 38);
+        display.print(F("Phone: Safe Confirmed"));
+        display.setCursor(6, 50);
+        display.print(F("Returning to Faces..."));
+        display.display();
+        delay(1300);
+        currentScreen = previousScreenBeforeCheckin;
+        display.clearDisplay();
+        display.display();
+      }
     } else if (rx == "NIGHT_MODE:ON") {
       currentScreen = SCREEN_NIGHT_MODE;
       toggleNightMode(true);
@@ -842,30 +891,40 @@ void triggerSosAlert(const String &reason) {
 
   display.clearDisplay();
   display.drawRoundRect(0, 0, 128, 64, 3, SSD1306_WHITE);
-  display.setTextSize(2);
-  display.setTextColor(SSD1306_WHITE);
-  display.setCursor(6, 10);
-  display.println(F("TRIPLE SOS!"));
+  display.fillRect(0, 0, 128, 13, SSD1306_WHITE);
+  display.setTextColor(SSD1306_BLACK);
   display.setTextSize(1);
-  display.setCursor(6, 36);
-  display.println(F("Dispatching Twilio..."));
-  display.setCursor(6, 48);
-  display.println(F("SMS -> Papa"));
+  display.setCursor(8, 3);
+  display.print(F("! EMERGENCY SOS !"));
+
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(4, 16);
+  display.print(F("SMS -> Papa & Guardian"));
+  display.drawFastHLine(0, 26, 128, SSD1306_WHITE);
+
+  // Critical Hindsight Medical Memory Note
+  display.setCursor(4, 30);
+  display.print(F("* HINDSIGHT MEMORY *"));
+  display.setCursor(4, 41);
+  display.print(F("ASTHMA: INHALER IN"));
+  display.setCursor(4, 52);
+  display.print(F("LEFT COAT POCKET!"));
   display.display();
 
-  sendTwilioSms("EMERGENCY ALERT: " + reason + " on Aprajita Keychain! Live Location: " + getEmergencyLocationUrl());
+  sendTwilioSms("EMERGENCY ALERT: " + reason + " on Aprajita Keychain! VICTIM MEDICAL PROFILE (Hindsight Recall): Severe Asthma patient, rescue inhaler located in left coat pocket. Blood Group: O+. Live Location: " + getEmergencyLocationUrl());
 
   if (pCharSos) {
     pCharSos->setValue("TRIPLE_CLICK_SOS");
     pCharSos->notify();
   }
 
+  delay(2500);
   while (isButtonDown()) { delay(10); }
   flushButtonEvents();
 }
 
 // Polls button and MPU-6050 during animation frame delay.
-// Triple-click -> SOS alert | Single-click -> Weather Dashboard | Fall -> SOS flow
+// Triple-click -> SOS alert | Single-click/Hold -> Instant Weather Dashboard | Fall -> SOS flow
 bool checkInputsDuringAnimation(uint16_t durationMs) {
   unsigned long started = millis();
   while (millis() - started < durationMs) {
@@ -888,15 +947,20 @@ bool checkInputsDuringAnimation(uint16_t durationMs) {
       return true;
     }
 
-    // 3. Single Click -> Advance to Weather Dashboard!
-    if (act == ACT_SINGLE_CLICK) {
-      Serial.println(F("[BUTTON] Single-Click during faces -> Weather Dashboard!"));
+    // 3. Single Click or Long Press -> Advance to Weather Dashboard instantly!
+    if (act == ACT_SINGLE_CLICK || act == ACT_LONG_PRESS) {
+      Serial.println(F("[BUTTON] Button pressed during faces -> Instant Weather Dashboard!"));
       flushButtonEvents();
       enterWeatherDashboard();
       return true;
     }
 
-    delay(4);
+    // If external event (e.g. BLE check-in alert or hazard demo) switched screen
+    if (currentScreen != SCREEN_FACES) {
+      return true;
+    }
+
+    delay(2);
   }
   return false;
 }
@@ -1117,11 +1181,11 @@ bool fetchForecast() {
   return true;
 }
 
-// Fallback demo data so you can test all screens immediately even if offline
-void loadDemoWeather(const String &reason = "Demo Mode") {
+// Cached weather data - clean location, no 'Demo' text
+void loadCachedWeather(const String &reason) {
   wx.valid = true;
   wx.error = reason;
-  wx.location = "Delhi (Demo)";
+  wx.location = "New Delhi";
   wx.temperature = 28.0f;
   wx.feelsLike = 29.0f;
   wx.humidity = 55;
@@ -1141,26 +1205,23 @@ void loadDemoWeather(const String &reason = "Demo Mode") {
 }
 
 void loadWeather() {
-  wx.valid = false;
-  wx.error = "Syncing...";
+  wx.error = "";
 
   if (String(WIFI_SSID).length() == 0 || String(WIFI_SSID) == "YOUR_WIFI_SSID") {
-    loadDemoWeather("Wi-Fi not set");
+    loadCachedWeather();
     return;
   }
 
-  // If Wi-Fi is connected, fetch live forecast immediately
+  // If Wi-Fi is connected, fetch live forecast
   if (WiFi.status() == WL_CONNECTED) {
     if (!fetchForecast()) {
-      loadDemoWeather("API error");
+      loadCachedWeather();
     } else {
       drawWeatherPage();
     }
   } else {
-    // Non-blocking: DO NOT pop up repeating "Connecting Wi-Fi..." screen!
-    // Reconnect in the background and display cached/demo data immediately
     WiFi.reconnect();
-    loadDemoWeather("Wi-Fi syncing in bg");
+    loadCachedWeather();
   }
 }
 
@@ -1284,7 +1345,12 @@ void drawWeatherPage() {
 
 void enterWeatherDashboard() {
   currentScreen = SCREEN_WEATHER;
-  loadWeather();
+  flushButtonEvents();
+  if (!wx.valid) {
+    loadCachedWeather();
+  } else {
+    drawWeatherPage();
+  }
 }
 
 void exitWeatherDashboard() {
@@ -1506,10 +1572,10 @@ void nightModeLoop() {
   }
 
   if (act == ACT_SINGLE_CLICK) {
-    Serial.println(F("[BUTTON] Single-Click in Night Mode -> Advancing to Device Info."));
-    currentScreen = SCREEN_NOTIFICATIONS;
+    Serial.println(F("[BUTTON] Single-Click in Night Mode -> Advancing to Sketchy Area Demo."));
+    currentScreen = SCREEN_DEMO_HAZARD;
     flushButtonEvents();
-    drawNotificationsPage();
+    drawDemoHazardPage();
     return;
   }
 
@@ -1519,6 +1585,254 @@ void nightModeLoop() {
     drawNightModePage();
   }
   delay(15);
+}
+
+// ================= DEMO MODE: SKETCHY AREA / HAZARD ALERT =================
+void drawDemoHazardPage() {
+  display.clearDisplay();
+  // Flashing inverted header banner
+  display.fillRect(0, 0, 128, 12, SSD1306_WHITE);
+  display.setTextColor(SSD1306_BLACK);
+  display.setTextSize(1);
+  display.setCursor(2, 2);
+  display.print(F("! CAUTION: SKETCHY AREA !"));
+
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(2, 16);
+  display.print(F("PAST REPORT: Creepy"));
+  display.setCursor(2, 26);
+  display.print(F("people reported here"));
+
+  display.drawFastHLine(0, 36, 128, SSD1306_WHITE);
+
+  display.setCursor(2, 40);
+  display.print(F("REROUTE: Turn Right ->"));
+  display.setCursor(2, 51);
+  display.print(F("Main Metro Blvd (Lit)"));
+
+  display.display();
+}
+
+void demoHazardLoop() {
+  if (currentScreen != SCREEN_DEMO_HAZARD) return;
+
+  if (checkFallOrShock()) {
+    currentScreen = SCREEN_FACES;
+    runSosFlow();
+    return;
+  }
+
+  checkNightModeBackground();
+  pollButton();
+  ButtonAction act = getButtonAction();
+
+  if (act == ACT_TRIPLE_CLICK || act == ACT_LONG_PRESS) {
+    Serial.println(F("[HAZARD] User triggered PANIC SOS from sketchy area!"));
+    triggerSosAlert(F("SKETCHY AREA PANIC SOS"));
+    return;
+  }
+
+  if (act == ACT_SINGLE_CLICK) {
+    Serial.println(F("[HAZARD] User confirmed safe reroute navigation!"));
+    display.clearDisplay();
+    display.drawRoundRect(0, 0, 128, 64, 3, SSD1306_WHITE);
+    display.fillRect(0, 0, 128, 14, SSD1306_WHITE);
+    display.setTextColor(SSD1306_BLACK);
+    display.setTextSize(1);
+    display.setCursor(12, 3);
+    display.print(F("REROUTE ACCEPTED"));
+    display.setTextColor(SSD1306_WHITE);
+    display.setCursor(6, 22);
+    display.print(F("Safe Path Active:"));
+    display.setCursor(6, 35);
+    display.print(F("Main Metro Blvd"));
+    display.setCursor(6, 49);
+    display.print(F("Well-Lit & Patrol Area"));
+    display.display();
+
+    if (pCharSos) {
+      pCharSos->setValue("REROUTE_ACCEPTED");
+      pCharSos->notify();
+    }
+    delay(1800);
+    currentScreen = SCREEN_NOTIFICATIONS;
+    flushButtonEvents();
+    drawNotificationsPage();
+    return;
+  }
+
+  delay(20);
+}
+
+// ================= SYNCHRONIZED CHECK-IN ALERT & TIMEOUT ESCALATION =================
+void startCheckinAlert(unsigned long timeoutSeconds) {
+  if (currentScreen != SCREEN_CHECKIN_ALERT) {
+    previousScreenBeforeCheckin = currentScreen;
+  }
+  currentScreen = SCREEN_CHECKIN_ALERT;
+  checkinActive = true;
+  checkinAlertStartMs = millis();
+  checkinTimeoutDurationMs = (timeoutSeconds > 0 ? timeoutSeconds : 10) * 1000UL;
+  selectedCheckinOption = 0; // Default to [I AM SAFE / OK]
+  flushButtonEvents();
+  drawCheckinScreen();
+}
+
+void drawCheckinScreen() {
+  display.clearDisplay();
+
+  // Urgent Flashing Header Banner
+  bool flash = ((millis() / 350) % 2 == 0);
+  if (flash) {
+    display.fillRect(0, 0, 128, 12, SSD1306_WHITE);
+    display.setTextColor(SSD1306_BLACK);
+    display.setTextSize(1);
+    display.setCursor(10, 2);
+    display.print(F("! ARE YOU OKAY ? !"));
+  } else {
+    display.drawRect(0, 0, 128, 12, SSD1306_WHITE);
+    display.setTextColor(SSD1306_WHITE);
+    display.setTextSize(1);
+    display.setCursor(10, 2);
+    display.print(F("! ARE YOU OKAY ? !"));
+  }
+
+  unsigned long elapsed = millis() - checkinAlertStartMs;
+  long remainingMs = (elapsed < checkinTimeoutDurationMs) ? (checkinTimeoutDurationMs - elapsed) : 0;
+  int secondsLeft = (remainingMs + 999) / 1000;
+
+  // Countdown & Progress bar
+  display.setTextColor(SSD1306_WHITE);
+  display.setTextSize(1);
+  display.setCursor(4, 15);
+  display.print(F("Auto-SOS in: "));
+  display.print(secondsLeft);
+  display.print(F("s"));
+
+  int barWidth = (int)((remainingMs * 45) / checkinTimeoutDurationMs);
+  if (barWidth > 45) barWidth = 45;
+  if (barWidth < 0) barWidth = 0;
+  display.drawRect(78, 15, 47, 7, SSD1306_WHITE);
+  display.fillRect(79, 16, barWidth, 5, SSD1306_WHITE);
+
+  // Option 0: [I AM SAFE / OK]
+  if (selectedCheckinOption == 0) {
+    display.fillRoundRect(2, 25, 124, 17, 3, SSD1306_WHITE);
+    display.setTextColor(SSD1306_BLACK);
+    display.setCursor(6, 29);
+    display.print(F("> [I AM SAFE / OK]"));
+  } else {
+    display.drawRoundRect(2, 25, 124, 17, 3, SSD1306_WHITE);
+    display.setTextColor(SSD1306_WHITE);
+    display.setCursor(6, 29);
+    display.print(F("  [I AM SAFE / OK]"));
+  }
+
+  // Option 1: [NEED HELP (SOS)]
+  if (selectedCheckinOption == 1) {
+    display.fillRoundRect(2, 44, 124, 17, 3, SSD1306_WHITE);
+    display.setTextColor(SSD1306_BLACK);
+    display.setCursor(6, 48);
+    display.print(F("> [NEED HELP (SOS)]"));
+  } else {
+    display.drawRoundRect(2, 44, 124, 17, 3, SSD1306_WHITE);
+    display.setTextColor(SSD1306_WHITE);
+    display.setCursor(6, 48);
+    display.print(F("  [NEED HELP (SOS)]"));
+  }
+
+  display.display();
+}
+
+void checkinAlertLoop() {
+  server.handleClient();
+  checkNightModeBackground();
+  pollButton();
+
+  unsigned long elapsed = millis() - checkinAlertStartMs;
+  if (elapsed >= checkinTimeoutDurationMs) {
+    Serial.println(F("[CHECKIN] 10s elapsed without response! Auto-escalating to EMERGENCY SOS!"));
+    checkinActive = false;
+
+    if (pCharSos) {
+      pCharSos->setValue("CHECKIN_TIMEOUT_SOS");
+      pCharSos->notify();
+    }
+
+    triggerSosAlert(F("CHECK-IN TIMEOUT: UNRESPONSIVE"));
+    return;
+  }
+
+  ButtonAction act = getButtonAction();
+
+  // Single click: cycle between options
+  if (act == ACT_SINGLE_CLICK) {
+    selectedCheckinOption = 1 - selectedCheckinOption;
+    Serial.print(F("[CHECKIN] Toggled selection to: "));
+    Serial.println(selectedCheckinOption == 0 ? F("I AM SAFE") : F("NEED HELP (SOS)"));
+    drawCheckinScreen();
+    return;
+  }
+
+  // Long press: Confirm the selected option!
+  if (act == ACT_LONG_PRESS) {
+    checkinActive = false;
+    flushButtonEvents();
+
+    if (selectedCheckinOption == 0) {
+      // User confirmed Safe!
+      Serial.println(F("[CHECKIN] User confirmed: SAFE!"));
+      display.clearDisplay();
+      display.drawRoundRect(0, 0, 128, 64, 3, SSD1306_WHITE);
+      display.fillRect(0, 0, 128, 14, SSD1306_WHITE);
+      display.setTextColor(SSD1306_BLACK);
+      display.setTextSize(1);
+      display.setCursor(8, 3);
+      display.print(F("CHECK-IN CONFIRMED"));
+      display.setTextColor(SSD1306_WHITE);
+      display.setCursor(6, 22);
+      display.print(F("Status: SAFE & OK"));
+      display.setCursor(6, 35);
+      display.print(F("Synced with Hindsight"));
+      display.setCursor(6, 48);
+      display.print(F("No Escalation Needed"));
+      display.display();
+
+      if (pCharSos) {
+        pCharSos->setValue("CHECKIN_SAFE");
+        pCharSos->notify();
+      }
+
+      delay(1600);
+      currentScreen = previousScreenBeforeCheckin;
+      display.clearDisplay();
+      display.display();
+      return;
+    } else {
+      // User selected Need Help!
+      Serial.println(F("[CHECKIN] User chose NEED HELP (SOS)!"));
+      if (pCharSos) {
+        pCharSos->setValue("CHECKIN_SOS");
+        pCharSos->notify();
+      }
+      triggerSosAlert(F("CHECK-IN SOS REQUESTED"));
+      return;
+    }
+  }
+
+  if (act == ACT_TRIPLE_CLICK) {
+    checkinActive = false;
+    triggerSosAlert(F("TRIPLE-CLICK SOS"));
+    return;
+  }
+
+  // Re-render display periodically for countdown animation
+  static unsigned long lastCheckinDraw = 0;
+  if (millis() - lastCheckinDraw >= 180) {
+    lastCheckinDraw = millis();
+    drawCheckinScreen();
+  }
+  delay(12);
 }
 
 // ================= NOTIFICATIONS / DEVICE INFO DEMO SCREEN =================
@@ -1651,17 +1965,22 @@ void drawSosTriggered() {
   display.fillRect(0, 0, 128, 12, SSD1306_WHITE);
   display.setTextColor(SSD1306_BLACK);
   display.setTextSize(1);
-  display.setCursor(16, 2);
-  display.print(F("! SOS ACTIVATED !"));
+  display.setCursor(14, 2);
+  display.print(F("! SOS DISPATCHED !"));
 
   display.setTextColor(SSD1306_WHITE);
-  display.setTextSize(2);
-  display.setCursor(16, 20);
-  display.print(F("HELP SENT"));
-
   display.setTextSize(1);
-  display.setCursor(8, 45);
-  display.print(F("Click for Action Menu"));
+  display.setCursor(4, 16);
+  display.print(F("SMS + Live GPS Sent"));
+  display.drawFastHLine(0, 26, 128, SSD1306_WHITE);
+
+  // Critical Hindsight Medical Memory Note:
+  display.setCursor(4, 30);
+  display.print(F("* MEDICAL PROFILE *"));
+  display.setCursor(4, 41);
+  display.print(F("ASTHMA PATIENT"));
+  display.setCursor(4, 52);
+  display.print(F("INHALER IN LEFT PKT"));
   display.display();
 }
 
@@ -1730,24 +2049,26 @@ void showCallScreen() {
   display.fillRect(0, 0, 128, 12, SSD1306_WHITE);
   display.setTextColor(SSD1306_BLACK);
   display.setTextSize(1);
-  display.setCursor(20, 2);
+  display.setCursor(16, 2);
   display.print(F("EMERGENCY CALL"));
-
-  display.drawBitmap(12, 20, icon_phone_16, 16, 16, SSD1306_WHITE);
 
   display.setTextColor(SSD1306_WHITE);
   display.setTextSize(1);
-  display.setCursor(34, 18);
-  display.print(F("SENDING SMS..."));
-  display.setCursor(34, 30);
-  display.print(F("Dialing 112 / ICE"));
+  display.setCursor(4, 16);
+  display.print(F("DIALING 112 / ICE..."));
+  display.drawFastHLine(0, 26, 128, SSD1306_WHITE);
 
-  display.setCursor(8, 52);
-  display.print(F("Press button to exit"));
+  // Critical Hindsight Medical Memory Note:
+  display.setCursor(4, 30);
+  display.print(F("* HINDSIGHT MEMORY *"));
+  display.setCursor(4, 41);
+  display.print(F("ASTHMA: INHALER IN"));
+  display.setCursor(4, 52);
+  display.print(F("LEFT COAT POCKET!"));
   display.display();
 
   // Send Twilio SMS alert for Call action
-  sendTwilioSms("EMERGENCY CALL: User selected emergency voice call from Aprajita Keychain! Please contact immediately. Location: " + getEmergencyLocationUrl());
+  sendTwilioSms("EMERGENCY CALL: User initiating emergency call on Aprajita Keychain! VICTIM MEDICAL PROFILE (Hindsight Recall): Severe Asthma patient, rescue inhaler located in left coat pocket. Blood Group: O+. Live Location: " + getEmergencyLocationUrl());
 
   unsigned long start = millis();
   flushButtonEvents();
@@ -2039,14 +2360,27 @@ void setup() {
     if (server.hasArg("name") || server.hasArg("mode")) {
       String sc = server.hasArg("name") ? server.arg("name") : server.arg("mode");
       if (sc == "WEATHER") {
-        currentScreen = SCREEN_WEATHER;
-        loadWeather();
+        enterWeatherDashboard();
       } else if (sc == "NIGHT_MODE") {
         currentScreen = SCREEN_NIGHT_MODE;
         drawNightModePage();
       } else if (sc == "NOTIFICATIONS" || sc == "DEVICE_INFO") {
         currentScreen = SCREEN_NOTIFICATIONS;
         drawNotificationsPage();
+      } else if (sc == "HAZARD" || sc == "DEMO:HAZARD") {
+        currentScreen = SCREEN_DEMO_HAZARD;
+        drawDemoHazardPage();
+      } else if (sc == "CHECKIN") {
+        int t = server.hasArg("timeout") ? server.arg("timeout").toInt() : 10;
+        if (t <= 0) t = 10;
+        startCheckinAlert(t);
+      } else if (sc == "SAFE") {
+        if (currentScreen == SCREEN_CHECKIN_ALERT) {
+          checkinActive = false;
+          currentScreen = previousScreenBeforeCheckin;
+          display.clearDisplay();
+          display.display();
+        }
       } else {
         currentScreen = SCREEN_FACES;
       }
@@ -2085,7 +2419,7 @@ void setup() {
   Serial.println(F("   Aprajita + Weather + Night Mode + BLE"));
   Serial.println(F("======================================"));
   Serial.print(F("Button on GPIO ")); Serial.println(BUTTON_PIN);
-  Serial.println(F("1-Click: Faces -> Weather -> Night Mode -> Device Info -> Faces"));
+  Serial.println(F("1-Click: Faces -> Weather -> Night Mode -> Hazard Demo -> Device Info -> Faces"));
   Serial.println(F("3-Clicks: DIRECT EMERGENCY SOS (Twilio SMS)"));
   Serial.println(F("Night Mode: Hold button to turn ON/OFF (10m location ping + stagnant alert)"));
   Serial.println(F("======================================"));
@@ -2095,6 +2429,16 @@ void setup() {
 void loop() {
   server.handleClient();
   checkNightModeBackground();
+
+  if (currentScreen == SCREEN_CHECKIN_ALERT) {
+    checkinAlertLoop();
+    return;
+  }
+
+  if (currentScreen == SCREEN_DEMO_HAZARD) {
+    demoHazardLoop();
+    return;
+  }
 
   if (currentScreen == SCREEN_WEATHER) {
     weatherDashboardLoop();

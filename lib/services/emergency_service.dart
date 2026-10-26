@@ -66,10 +66,12 @@ class EmergencyService {
     }
     _activeEvent = null;
 
-    // Listen to physical 3-press button events from ESP32 hardware
+    // Listen to physical 3-press button events and hardware alerts from ESP32
     _hwSub = _hardwareService.hardwareSosStream.listen((event) {
-      if (!isSosActive && !isCountingDown) {
-        startSosCountdown(source: 'PHYSICAL_BUTTON_3PRESS');
+      if (event.contains('SOS') || event.contains('TRIGGER') || event.contains('FALL')) {
+        if (!isSosActive && !isCountingDown) {
+          startSosCountdown(source: 'PHYSICAL_BUTTON_3PRESS');
+        }
       }
     });
   }

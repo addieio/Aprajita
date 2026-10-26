@@ -22,12 +22,17 @@ class HardwareService {
   final StreamController<String> _stagnantAlertController =
       StreamController<String>.broadcast();
 
+  // Stream of Check-in events and Reroute confirmations from Keychain
+  final StreamController<String> _hardwareCheckinEventController =
+      StreamController<String>.broadcast();
+
   // Terminal log stream for BLE packets & network logs
   final StreamController<String> _terminalLogController =
       StreamController<String>.broadcast();
 
   Stream<HardwareTelemetry> get telemetryStream => _telemetryController.stream;
   Stream<String> get hardwareSosStream => _hardwareSosEventController.stream;
+  Stream<String> get checkinEventStream => _hardwareCheckinEventController.stream;
   Stream<bool> get nightModeStream => _nightModeController.stream;
   Stream<String> get stagnantAlertStream => _stagnantAlertController.stream;
   Stream<String> get terminalLogStream => _terminalLogController.stream;
@@ -226,6 +231,11 @@ class HardwareService {
                   _nightModeController.add(false);
                 } else if (msg == 'STAGNANT_ALERT') {
                   _stagnantAlertController.add('STAGNANT_ALERT');
+                } else if (msg.startsWith('CHECKIN_') || msg == 'REROUTE_ACCEPTED') {
+                  _hardwareCheckinEventController.add(msg);
+                  if (msg == 'CHECKIN_SOS' || msg == 'CHECKIN_TIMEOUT_SOS') {
+                    _hardwareSosEventController.add(msg);
+                  }
                 } else {
                   _hardwareSosEventController.add(msg);
                 }
@@ -380,6 +390,69 @@ class HardwareService {
     try {
       final res = await http.post(Uri.parse('http://$_espIp/screen?nightmode=${enable ? 1 : 0}')).timeout(const Duration(seconds: 2));
       logTerminal('🛡️ Synced Night Mode $enable to ESP32 (HTTP)');
+      return res.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Trigger Synchronized Safety Check-in on physical ESP32 OLED display
+  Future<bool> sendCheckinAlertToEsp32({int timeoutSeconds = 10}) async {
+    final cmd = 'CHECKIN:START:$timeoutSeconds';
+    logTerminal('⏱️ TX BLE -> Starting Check-In on Keychain ($timeoutSeconds seconds)');
+    if (_charScreen != null && _isBleConnected) {
+      try {
+        await _charScreen!.write(cmd.codeUnits);
+        return true;
+      } catch (e) {
+        logTerminal('⚠️ BLE Check-in trigger failed: $e');
+      }
+    }
+
+    try {
+      final res = await http.post(Uri.parse('http://$_espIp/screen?mode=CHECKIN&timeout=$timeoutSeconds')).timeout(const Duration(seconds: 2));
+      return res.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Confirm Safe Check-In to physical ESP32 OLED display (Dismisses hardware alert)
+  Future<bool> sendCheckinSafeToEsp32() async {
+    const cmd = 'CHECKIN:SAFE';
+    logTerminal('✅ TX BLE -> Check-In Confirmed Safe to Keychain');
+    if (_charScreen != null && _isBleConnected) {
+      try {
+        await _charScreen!.write(cmd.codeUnits);
+        return true;
+      } catch (e) {
+        logTerminal('⚠️ BLE Check-in safe failed: $e');
+      }
+    }
+
+    try {
+      final res = await http.post(Uri.parse('http://$_espIp/screen?mode=SAFE')).timeout(const Duration(seconds: 2));
+      return res.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Trigger Demo Mode: Sketchy Area / Danger Zone Alert on ESP32 OLED display
+  Future<bool> sendDemoHazardToEsp32() async {
+    const cmd = 'DEMO:HAZARD';
+    logTerminal('⚠️ TX BLE -> Triggered Sketchy Area Demo on Keychain');
+    if (_charScreen != null && _isBleConnected) {
+      try {
+        await _charScreen!.write(cmd.codeUnits);
+        return true;
+      } catch (e) {
+        logTerminal('⚠️ BLE Demo Hazard failed: $e');
+      }
+    }
+
+    try {
+      final res = await http.post(Uri.parse('http://$_espIp/screen?mode=HAZARD')).timeout(const Duration(seconds: 2));
       return res.statusCode == 200;
     } catch (_) {
       return false;

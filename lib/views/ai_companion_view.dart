@@ -6,6 +6,7 @@ import '../services/hindsight_service.dart';
 import '../services/storage_service.dart';
 import '../services/twilio_service.dart';
 import '../services/location_service.dart';
+import '../services/hardware_service.dart';
 import '../models/contact_model.dart';
 import '../theme/app_theme.dart';
 
@@ -15,6 +16,7 @@ class AiCompanionView extends StatefulWidget {
   final StorageService storageService;
   final TwilioService twilioService;
   final LocationService locationService;
+  final HardwareService hardwareService;
 
   const AiCompanionView({
     super.key,
@@ -23,6 +25,7 @@ class AiCompanionView extends StatefulWidget {
     required this.storageService,
     required this.twilioService,
     required this.locationService,
+    required this.hardwareService,
   });
 
   @override
@@ -52,10 +55,13 @@ class _AiCompanionViewState extends State<AiCompanionView> {
   Timer? _checkinTimer;
   int _watchSecondsLeft = 0;
   bool _isWatchActive = false;
+  bool _isUrgentDialogOpen = false;
+  StreamSubscription? _hardwareCheckinSub;
 
   final List<_ChatMessage> _messages = [];
 
   final List<String> _quickPrompts = const [
+    'Check on me in 5 seconds',
     'Check on me in 10 seconds',
     'What is my rule if I miss check-in?',
     'What safety settings did I choose for solo travel?',
@@ -66,10 +72,46 @@ class _AiCompanionViewState extends State<AiCompanionView> {
   void initState() {
     super.initState();
     _loadInitialGreeting();
+
+    // Listen to real-time Keychain Check-in confirmations and hazard responses
+    _hardwareCheckinSub = widget.hardwareService.checkinEventStream.listen((event) {
+      if (!mounted) return;
+      if (event == 'CHECKIN_SAFE') {
+        if (_isUrgentDialogOpen) {
+          Navigator.of(context, rootNavigator: true).pop();
+          _isUrgentDialogOpen = false;
+        }
+        _confirmSafeCheckin(fromHardware: true);
+      } else if (event == 'CHECKIN_SOS' || event == 'CHECKIN_TIMEOUT_SOS') {
+        if (_isUrgentDialogOpen) {
+          Navigator.of(context, rootNavigator: true).pop();
+          _isUrgentDialogOpen = false;
+        }
+        _executeMissedCheckinEscalation(
+          reason: event == 'CHECKIN_TIMEOUT_SOS'
+              ? 'Safety Check-In timed out on physical Keychain (unresponsive within 10s grace period)'
+              : 'User pressed NEED HELP (SOS) on physical Aprajita Keychain Check-In',
+        );
+      } else if (event == 'REROUTE_ACCEPTED') {
+        setState(() {
+          _messages.add(
+            _ChatMessage(
+              text: '🛡️ [SAFE REROUTE CONFIRMED ON KEYCHAIN]\n'
+                  'User confirmed safe path reroute via Main Metro Blvd (Well-Lit & Monitored). Live guardian tracking active.',
+              isUser: false,
+              badge: 'SAFE REROUTE',
+              timestamp: DateTime.now(),
+            ),
+          );
+        });
+        _scrollToBottom();
+      }
+    });
   }
 
   @override
   void dispose() {
+    _hardwareCheckinSub?.cancel();
     _checkinTimer?.cancel();
     _textController.dispose();
     _scrollController.dispose();
@@ -227,9 +269,13 @@ class _AiCompanionViewState extends State<AiCompanionView> {
     });
   }
 
-  /// FLASHES SCREEN WITH URGENT SAFETY CHECK-IN DIALOG
+  /// FLASHES SCREEN WITH URGENT SAFETY CHECK-IN DIALOG (SYNCS TO KEYCHAIN DISPLAY)
   void _flashUrgentCheckinDialog() {
     if (!mounted) return;
+    _isUrgentDialogOpen = true;
+
+    // Simultaneously trigger Check-in screen on physical ESP32 OLED Keychain!
+    widget.hardwareService.sendCheckinAlertToEsp32(timeoutSeconds: 10);
 
     showDialog(
       context: context,
@@ -239,33 +285,47 @@ class _AiCompanionViewState extends State<AiCompanionView> {
       builder: (dialogCtx) {
         return _UrgentCheckinDialog(
           onSafe: () {
+            _isUrgentDialogOpen = false;
             _confirmSafeCheckin();
           },
           onSos: () {
+            _isUrgentDialogOpen = false;
             _executeMissedCheckinEscalation(
               reason: 'User explicitly requested help during safety check-in',
             );
           },
           onTimeout: () {
+            _isUrgentDialogOpen = false;
             _executeMissedCheckinEscalation(
               reason: 'No response to scheduled check-in within grace period',
             );
           },
         );
       },
-    );
+    ).then((_) {
+      _isUrgentDialogOpen = false;
+    });
   }
 
   /// USER CONFIRMS SAFETY
-  void _confirmSafeCheckin() {
+  void _confirmSafeCheckin({bool fromHardware = false}) {
     HapticFeedback.lightImpact();
+
+    // Dismiss alert on physical ESP32 if confirmed on phone
+    if (!fromHardware) {
+      widget.hardwareService.sendCheckinSafeToEsp32();
+    }
+
     setState(() {
       _messages.add(
         _ChatMessage(
-          text: '✅ [CHECK-IN CONFIRMED]\n'
-              'Aditya confirmed safe and sound on time! Safety streak active. No escalation dispatched.',
+          text: fromHardware
+              ? '✅ [CHECK-IN CONFIRMED VIA KEYCHAIN DISPLAY]\n'
+                'Aditya confirmed safe status on the physical Aprajita keychain! Live Hindsight memory synced.'
+              : '✅ [CHECK-IN CONFIRMED ON PHONE]\n'
+                'Aditya confirmed safe and sound on time! Synced to keychain. No escalation dispatched.',
           isUser: false,
-          badge: 'SAFE CONFIRMED',
+          badge: fromHardware ? 'HARDWARE SAFE' : 'SAFE CONFIRMED',
           timestamp: DateTime.now(),
         ),
       );
@@ -274,7 +334,7 @@ class _AiCompanionViewState extends State<AiCompanionView> {
 
     // Retain safe confirmation
     widget.hindsightService.retain(
-      'User Aditya safely confirmed scheduled safety check-in on time.',
+      'User Aditya safely confirmed scheduled safety check-in on time ${fromHardware ? "via physical Keychain display" : "via Phone app"}.',
       tag: 'checkin_confirmed',
     );
   }
@@ -292,7 +352,7 @@ class _AiCompanionViewState extends State<AiCompanionView> {
     final targetPhone = primary.phone.isNotEmpty ? primary.phone : '+919876543210';
     final targetName = primary.name.isNotEmpty ? primary.name : 'Emergency Contact';
 
-    // 3. Dispatch SMS alert
+    // 3. Dispatch SMS alert with Hindsight Medical Profile
     final smsResult = await widget.twilioService.sendEmergencySms(
       recipientPhone: targetPhone,
       senderName: 'Aprajita Safety Escalation',
@@ -303,14 +363,14 @@ class _AiCompanionViewState extends State<AiCompanionView> {
       batteryLevel: 94,
       triggerSource: 'MISSED_CHECKIN_ESCALATION',
       timestamp: DateTime.now(),
-      customNote: '$reason. Please contact immediately.',
+      customNote: '$reason. HINDSIGHT MEDICAL MEMORY: Severe Asthma patient - rescue inhaler in left jacket pocket. Blood Group: O+.',
     );
 
     // 4. Retain this escalation incident into Vectorize Hindsight
     final incidentSummary = 'SAFETY ESCALATION DISPATCHED: $reason at '
         '${DateTime.now().toLocal().toString().substring(11, 19)}. '
         'Escalated to primary contact $targetName ($targetPhone). '
-        'GPS Fix: $mapUrl. Status: ${smsResult.success ? "DELIVERED" : "SENT"}.';
+        'Victim Profile: Asthma patient, inhaler in left pocket. GPS Fix: $mapUrl. Status: ${smsResult.success ? "DELIVERED" : "SENT"}.';
     await widget.hindsightService.retain(incidentSummary, tag: 'escalation_incident');
 
     if (mounted) {
@@ -320,6 +380,7 @@ class _AiCompanionViewState extends State<AiCompanionView> {
             text: '🚨 [ESCALATION PROTOCOL EXECUTED]\n\n'
                 '• Reason: $reason\n'
                 '• Escalation Rule: "Immediately alert $targetName with live GPS fix."\n'
+                '• Medical Memory Recall: Asthma patient, rescue inhaler in left coat pocket.\n'
                 '• Dispatch Status: ${smsResult.success ? "Alert Delivered to $targetPhone ✅" : "Dispatched to $targetPhone"}\n'
                 '• Live GPS: ${loc.lat.toStringAsFixed(4)}, ${loc.lng.toStringAsFixed(4)}\n'
                 '• Incident Record: Stored in Vectorize Cloud memory bank.',
@@ -696,32 +757,69 @@ class _AiCompanionViewState extends State<AiCompanionView> {
                     style: TextStyle(fontSize: 11.5, color: Colors.white70),
                   ),
                   const SizedBox(height: 10),
-                  Row(
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
                     children: [
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          icon: const Icon(Icons.timer, size: 14),
-                          label: const Text('Check In (10s Test)', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold)),
-                          onPressed: () => _startScheduledCheckin(10, '10-second safety check-in test'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppTheme.indigo,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 10),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          ),
+                      ElevatedButton.icon(
+                        icon: const Icon(Icons.flash_on, size: 14),
+                        label: const Text('Check In (5s Demo)', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold)),
+                        onPressed: () => _startScheduledCheckin(5, '5-second quick live demo check-in'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.amber.shade800,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          icon: const Icon(Icons.flash_on, size: 14, color: AppTheme.emerald),
-                          label: const Text('Recall Rule', style: TextStyle(fontSize: 11.5, color: AppTheme.emerald, fontWeight: FontWeight.bold)),
-                          onPressed: () => _sendMessage('What is my rule if I miss check-in?'),
-                          style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: AppTheme.emerald),
-                            padding: const EdgeInsets.symmetric(vertical: 10),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          ),
+                      ElevatedButton.icon(
+                        icon: const Icon(Icons.timer, size: 14),
+                        label: const Text('Check In (10s)', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold)),
+                        onPressed: () => _startScheduledCheckin(10, '10-second safety check-in test'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.indigo,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                      ),
+                      ElevatedButton.icon(
+                        icon: const Icon(Icons.warning_amber_rounded, size: 14),
+                        label: const Text('Demo: Sketchy Area', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold)),
+                        onPressed: () async {
+                          HapticFeedback.mediumImpact();
+                          await widget.hardwareService.sendDemoHazardToEsp32();
+                          setState(() {
+                            _messages.add(
+                              _ChatMessage(
+                                text: '⚠️ [DEMO: ENTERING SKETCHY AREA]\n\n'
+                                    'Caution alert pushed to physical Aprajita Keychain display:\n'
+                                    '• Past Report: Creepy people reported at this location after dark.\n'
+                                    '• Recommended Safe Reroute: Turn Right onto Main Metro Blvd (Well-Lit).\n'
+                                    '• Interactive Action: Click once on Keychain to accept detour, or Hold/3x for Panic SOS.',
+                                isUser: false,
+                                badge: 'HAZARD DEMO',
+                                timestamp: DateTime.now(),
+                              ),
+                            );
+                          });
+                          _scrollToBottom();
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.deepOrange.shade700,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                      ),
+                      OutlinedButton.icon(
+                        icon: const Icon(Icons.psychology, size: 14, color: AppTheme.emerald),
+                        label: const Text('Recall Rule', style: TextStyle(fontSize: 11.5, color: AppTheme.emerald, fontWeight: FontWeight.bold)),
+                        onPressed: () => _sendMessage('What is my rule if I miss check-in?'),
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: AppTheme.emerald),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                         ),
                       ),
                     ],
@@ -934,7 +1032,7 @@ class _UrgentCheckinDialogState extends State<_UrgentCheckinDialog>
   late Animation<double> _pulseAnim;
   Timer? _countdownTimer;
   Timer? _vibrateTimer;
-  int _secondsLeft = 15;
+  int _secondsLeft = 10;
   bool _isDisposed = false;
 
   @override

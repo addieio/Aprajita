@@ -124,8 +124,33 @@ class _GifCustomizerViewState extends State<GifCustomizerView> {
     super.dispose();
   }
 
+  String _resolveGifUrl(String input) {
+    input = input.trim();
+    if (input.isEmpty) return '';
+    // Resolve standard Giphy webpage URLs to direct GIF media link
+    if (input.contains('giphy.com/gifs/')) {
+      final parts = input.split('giphy.com/gifs/')[1].split('?')[0].split('/');
+      final segment = parts.firstWhere((p) => p.isNotEmpty, orElse: () => '');
+      final id = segment.contains('-') ? segment.split('-').last : segment;
+      if (id.isNotEmpty) {
+        return 'https://media.giphy.com/media/$id/giphy.gif';
+      }
+    }
+    if (input.contains('i.giphy.com/')) {
+      final id = input.split('i.giphy.com/')[1].split('.')[0];
+      return 'https://media.giphy.com/media/$id/giphy.gif';
+    }
+    return input;
+  }
+
   Future<void> _saveAndApply() async {
-    await widget.storageService.setCustomGifPreset(_selectedPreset);
+    final customResolved = _resolveGifUrl(_customUrlController.text);
+    if (customResolved.isNotEmpty) {
+      await widget.storageService.setCustomGifPreset(customResolved);
+    } else {
+      await widget.storageService.setCustomGifPreset(_selectedPreset);
+    }
+
     await widget.storageService.setCustomGifFps(_fps);
     await widget.storageService.setCustomGifClock24(_clock24);
     await widget.storageService.setCustomGifShowBattery(_showBattery);
@@ -225,7 +250,7 @@ class _GifCustomizerViewState extends State<GifCustomizerView> {
                   borderRadius: BorderRadius.circular(8),
                   child: Stack(
                     children: [
-                      // Background Animated GIF
+                      // Background Animated GIF (Real Giphy / Custom Stream)
                       Positioned.fill(
                         child: ColorFiltered(
                           colorFilter: _invertColors
@@ -236,17 +261,21 @@ class _GifCustomizerViewState extends State<GifCustomizerView> {
                                   0, 0, 0, 1, 0, // alpha
                                 ])
                               : const ColorFilter.mode(Colors.transparent, BlendMode.multiply),
-                          child: Image.network(
-                            _customUrlController.text.isNotEmpty
-                                ? _customUrlController.text
-                                : activePreset.gifUrl,
-                            fit: BoxFit.contain,
-                            errorBuilder: (ctx, err, stack) => Center(
-                              child: Text(
-                                activePreset.icon,
-                                style: const TextStyle(fontSize: 48),
-                              ),
-                            ),
+                          child: Builder(
+                            builder: (ctx) {
+                              final resolved = _resolveGifUrl(_customUrlController.text);
+                              final urlToLoad = resolved.isNotEmpty ? resolved : activePreset.gifUrl;
+                              return Image.network(
+                                urlToLoad,
+                                fit: BoxFit.contain,
+                                errorBuilder: (ctx, err, stack) => Center(
+                                  child: Text(
+                                    activePreset.icon,
+                                    style: const TextStyle(fontSize: 48),
+                                  ),
+                                ),
+                              );
+                            },
                           ),
                         ),
                       ),
@@ -385,27 +414,58 @@ class _GifCustomizerViewState extends State<GifCustomizerView> {
 
             const SizedBox(height: 12),
 
-            // Custom GIF URL Input
+            // Custom GIF / Giphy URL Input
             Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
                 color: AppTheme.cardDark,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppTheme.borderSubtle),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: _customUrlController.text.isNotEmpty ? AppTheme.emerald : AppTheme.borderSubtle,
+                  width: _customUrlController.text.isNotEmpty ? 1.5 : 1,
+                ),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Load Custom Animated GIF from URL or Supabase',
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppTheme.textPrimary),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF6157FF),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Text(
+                          'GIPHY',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w900,
+                            color: Colors.white,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      const Expanded(
+                        child: Text(
+                          'Import Real Animated GIF / Giphy Link',
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppTheme.textPrimary),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 6),
+                  const Text(
+                    'Paste any direct .gif link or Giphy webpage URL. It auto-resolves and streams directly to your companion display!',
+                    style: TextStyle(fontSize: 11, color: AppTheme.textSecondary),
+                  ),
+                  const SizedBox(height: 10),
                   TextField(
                     controller: _customUrlController,
                     style: const TextStyle(fontSize: 12, color: AppTheme.textPrimary),
                     decoration: InputDecoration(
-                      hintText: 'https://example.com/animation.gif',
+                      hintText: 'https://giphy.com/gifs/cute-cat-MDJ9IbxxvDUQM',
                       hintStyle: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
                       filled: true,
                       fillColor: AppTheme.bgDark,
@@ -413,12 +473,81 @@ class _GifCustomizerViewState extends State<GifCustomizerView> {
                         borderRadius: BorderRadius.circular(8),
                         borderSide: const BorderSide(color: AppTheme.borderSubtle),
                       ),
-                      suffixIcon: IconButton(
-                        icon: const Icon(Icons.preview_rounded, size: 18),
-                        onPressed: () => setState(() {}),
-                      ),
+                      suffixIcon: _customUrlController.text.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.clear, size: 18, color: Colors.white70),
+                              onPressed: () => setState(() => _customUrlController.clear()),
+                            )
+                          : const Icon(Icons.link, size: 18, color: Colors.white38),
                     ),
                     onChanged: (val) => setState(() {}),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Trending Real Giphy Presets:',
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.white70),
+                  ),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      ActionChip(
+                        avatar: const Text('🐱', style: TextStyle(fontSize: 12)),
+                        label: const Text('Cute Cat', style: TextStyle(fontSize: 11)),
+                        backgroundColor: AppTheme.bgDark,
+                        side: const BorderSide(color: AppTheme.borderSubtle),
+                        onPressed: () {
+                          setState(() {
+                            _customUrlController.text = 'https://media.giphy.com/media/MDJ9IbxxvDUQM/giphy.gif';
+                          });
+                        },
+                      ),
+                      ActionChip(
+                        avatar: const Text('🛡️', style: TextStyle(fontSize: 12)),
+                        label: const Text('Guardian Shield', style: TextStyle(fontSize: 11)),
+                        backgroundColor: AppTheme.bgDark,
+                        side: const BorderSide(color: AppTheme.borderSubtle),
+                        onPressed: () {
+                          setState(() {
+                            _customUrlController.text = 'https://media.giphy.com/media/3o7aD2saalBwwftBIY/giphy.gif';
+                          });
+                        },
+                      ),
+                      ActionChip(
+                        avatar: const Text('⚡', style: TextStyle(fontSize: 12)),
+                        label: const Text('Cyber Beat', style: TextStyle(fontSize: 11)),
+                        backgroundColor: AppTheme.bgDark,
+                        side: const BorderSide(color: AppTheme.borderSubtle),
+                        onPressed: () {
+                          setState(() {
+                            _customUrlController.text = 'https://media.giphy.com/media/blSTtZehjAZ8I/giphy.gif';
+                          });
+                        },
+                      ),
+                      ActionChip(
+                        avatar: const Text('❤️', style: TextStyle(fontSize: 12)),
+                        label: const Text('Heart Glow', style: TextStyle(fontSize: 11)),
+                        backgroundColor: AppTheme.bgDark,
+                        side: const BorderSide(color: AppTheme.borderSubtle),
+                        onPressed: () {
+                          setState(() {
+                            _customUrlController.text = 'https://media.giphy.com/media/3o7TKoWXm3okO1kgHC/giphy.gif';
+                          });
+                        },
+                      ),
+                      ActionChip(
+                        avatar: const Text('🤖', style: TextStyle(fontSize: 12)),
+                        label: const Text('Cyber Eye', style: TextStyle(fontSize: 11)),
+                        backgroundColor: AppTheme.bgDark,
+                        side: const BorderSide(color: AppTheme.borderSubtle),
+                        onPressed: () {
+                          setState(() {
+                            _customUrlController.text = 'https://media.giphy.com/media/artj92V8o75VPL7AeQ/giphy.gif';
+                          });
+                        },
+                      ),
+                    ],
                   ),
                 ],
               ),

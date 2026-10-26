@@ -181,6 +181,7 @@ class _AppShellState extends State<AppShell> {
         storageService: widget.storageService,
         twilioService: widget.twilioService,
         locationService: widget.locationService,
+        hardwareService: widget.hardwareService,
       ),
       HardwareView(
         hardwareService: widget.hardwareService,
