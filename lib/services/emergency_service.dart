@@ -12,6 +12,7 @@ import 'twilio_service.dart';
 import 'location_service.dart';
 import 'hardware_service.dart';
 import 'nearby_community_service.dart';
+import 'hindsight_service.dart';
 
 class EmergencyService {
   final StorageService _storageService;
@@ -19,6 +20,7 @@ class EmergencyService {
   final LocationService _locationService;
   final HardwareService _hardwareService;
   final NearbyCommunityService _nearbyService;
+  final HindsightService? _hindsightService;
 
   SosAlertEvent? _activeEvent;
   final StreamController<SosAlertEvent?> _activeEventController =
@@ -45,11 +47,13 @@ class EmergencyService {
     required LocationService locationService,
     required HardwareService hardwareService,
     required NearbyCommunityService nearbyService,
+    HindsightService? hindsightService,
   })  : _storageService = storageService,
         _twilioService = twilioService,
         _locationService = locationService,
         _hardwareService = hardwareService,
-        _nearbyService = nearbyService {
+        _nearbyService = nearbyService,
+        _hindsightService = hindsightService {
     // When app is opened, ensure it does NOT directly open a stale SOS panel
     final pastSos = _storageService.loadActiveSos();
     if (pastSos != null) {
@@ -254,6 +258,15 @@ class EmergencyService {
     await _storageService.addHistoryItem(finalEvent);
     _activeEventController.add(_activeEvent);
 
+    // Retain factual incident summary into Vectorize Hindsight Memory Bank
+    try {
+      final incidentSummary = 'EMERGENCY INCIDENT ($formattedTime): SOS triggered via $source. '
+          'Location Fix: ${loc.lat.toStringAsFixed(4)}, ${loc.lng.toStringAsFixed(4)} ($mapUrl). '
+          'Recipients: ${updatedRecipients.map((r) => "${r.name}: ${r.status.name}").join(", ")}. '
+          'Battery: ${_hardwareService.telemetry.batteryLevel}%.';
+      _hindsightService?.retain(incidentSummary, tag: 'sos_incident');
+    } catch (_) {}
+
     // Automatic native carrier SMS fallback if cloud dispatch encounters unverified number or failure
     if (anyFailed) {
       _hardwareService.logTerminal(
@@ -382,16 +395,21 @@ class EmergencyService {
     if (target == null || target.isEmpty) {
       final contacts = _storageService.loadContacts();
       final primaryId = _storageService.getPrimaryContactId();
-      if (primaryId != null && primaryId.isNotEmpty) {
-        final primary = contacts.firstWhere(
-          (c) => c.id == primaryId,
-          orElse: () => contacts.firstWhere((c) => c.isEmergencyRecipient,
-              orElse: () => contacts.first),
-        );
-        target = primary.phone;
-      } else if (contacts.isNotEmpty) {
-        final em = contacts.where((c) => c.isEmergencyRecipient).toList();
-        target = em.isNotEmpty ? em.first.phone : contacts.first.phone;
+      if (contacts.isNotEmpty) {
+        TrustedContact? primary;
+        if (primaryId != null && primaryId.isNotEmpty) {
+          primary = contacts.cast<TrustedContact?>().firstWhere(
+            (c) => c?.id == primaryId,
+            orElse: () => contacts.cast<TrustedContact?>().firstWhere(
+              (c) => c?.isEmergencyRecipient == true,
+              orElse: () => contacts.first,
+            ),
+          );
+        } else {
+          final em = contacts.where((c) => c.isEmergencyRecipient).toList();
+          primary = em.isNotEmpty ? em.first : contacts.first;
+        }
+        target = primary?.phone;
       }
     }
 
@@ -440,16 +458,21 @@ class EmergencyService {
     if (targetPhone == null || targetPhone.isEmpty) {
       final contacts = _storageService.loadContacts();
       final primaryId = _storageService.getPrimaryContactId();
-      if (primaryId != null && primaryId.isNotEmpty) {
-        final primary = contacts.firstWhere(
-          (c) => c.id == primaryId,
-          orElse: () => contacts.firstWhere((c) => c.isEmergencyRecipient,
-              orElse: () => contacts.first),
-        );
-        targetPhone = primary.phone;
-      } else if (contacts.isNotEmpty) {
-        final em = contacts.where((c) => c.isEmergencyRecipient).toList();
-        targetPhone = em.isNotEmpty ? em.first.phone : contacts.first.phone;
+      if (contacts.isNotEmpty) {
+        TrustedContact? primary;
+        if (primaryId != null && primaryId.isNotEmpty) {
+          primary = contacts.cast<TrustedContact?>().firstWhere(
+            (c) => c?.id == primaryId,
+            orElse: () => contacts.cast<TrustedContact?>().firstWhere(
+              (c) => c?.isEmergencyRecipient == true,
+              orElse: () => contacts.first,
+            ),
+          );
+        } else {
+          final em = contacts.where((c) => c.isEmergencyRecipient).toList();
+          primary = em.isNotEmpty ? em.first : contacts.first;
+        }
+        targetPhone = primary?.phone;
       }
     }
 

@@ -48,8 +48,49 @@ class _SettingsViewState extends State<SettingsView> {
     _supabaseUrlCtrl = TextEditingController(text: supabase['url'] ?? '');
     _supabaseKeyCtrl = TextEditingController(text: supabase['anonKey'] ?? '');
 
+    final hindsight = widget.storageService.loadHindsightConfig();
+    _hindsightKeyCtrl = TextEditingController(text: hindsight['apiKey'] ?? '');
+    _hindsightBankCtrl = TextEditingController(text: hindsight['bankId'] ?? 'aprajita_safety');
+
+    final groq = widget.storageService.loadGroqConfig();
+    _groqKeyCtrl = TextEditingController(text: groq['apiKey'] ?? '');
+    _groqModelCtrl = TextEditingController(text: groq['model'] ?? 'openai/gpt-oss-120b');
+
     _countdownSeconds = widget.storageService.getSosCountdownSeconds();
     _volumeSosEnabled = widget.storageService.isVolumeSosEnabled();
+  }
+
+  late TextEditingController _hindsightKeyCtrl;
+  late TextEditingController _hindsightBankCtrl;
+  late TextEditingController _groqKeyCtrl;
+  late TextEditingController _groqModelCtrl;
+
+  Future<void> _saveHindsight() async {
+    await widget.storageService.saveHindsightConfig(
+      apiKey: _hindsightKeyCtrl.text.trim(),
+      bankId: _hindsightBankCtrl.text.trim(),
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Vectorize Hindsight memory configuration saved!'),
+        backgroundColor: AppTheme.emerald,
+      ),
+    );
+  }
+
+  Future<void> _saveGroq() async {
+    await widget.storageService.saveGroqConfig(
+      apiKey: _groqKeyCtrl.text.trim(),
+      model: _groqModelCtrl.text.trim(),
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Groq LLM settings saved!'),
+        backgroundColor: AppTheme.emerald,
+      ),
+    );
   }
 
   Future<void> _saveTwilio() async {
@@ -325,6 +366,119 @@ class _SettingsViewState extends State<SettingsView> {
                       ),
                     ),
                   ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // VECTORIZE HINDSIGHT CLOUD SECTION
+          _buildSectionHeader('VECTORIZE HINDSIGHT MEMORY', Icons.psychology_outlined),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppTheme.cardDark,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppTheme.emerald.withValues(alpha: 0.3)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Persistent episodic, semantic & procedural memory engine powering adaptive safety decisions.',
+                  style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                ),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: _hindsightKeyCtrl,
+                  obscureText: true,
+                  decoration: InputDecoration(
+                    labelText: 'Hindsight API Key',
+                    hintText: 'hsk_...',
+                    filled: true,
+                    fillColor: AppTheme.surfaceDark,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _hindsightBankCtrl,
+                  decoration: InputDecoration(
+                    labelText: 'Memory Bank ID',
+                    hintText: 'aprajita_safety',
+                    filled: true,
+                    fillColor: AppTheme.surfaceDark,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: _saveHindsight,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.emerald,
+                      foregroundColor: Colors.black,
+                      textStyle: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    child: const Text('Save Hindsight Memory Settings'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // GROQ CLOUD LLM SECTION
+          _buildSectionHeader('GROQ AI INFERENCE ENGINE', Icons.bolt_outlined),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppTheme.cardDark,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppTheme.borderSubtle),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Ultra-fast LLM inference for safety companion, incident explanation, and responder briefings.',
+                  style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                ),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: _groqKeyCtrl,
+                  obscureText: true,
+                  decoration: InputDecoration(
+                    labelText: 'Groq API Key',
+                    hintText: 'gsk_...',
+                    filled: true,
+                    fillColor: AppTheme.surfaceDark,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _groqModelCtrl,
+                  decoration: InputDecoration(
+                    labelText: 'Groq Model ID',
+                    hintText: 'openai/gpt-oss-120b',
+                    filled: true,
+                    fillColor: AppTheme.surfaceDark,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: _saveGroq,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.crimson,
+                      foregroundColor: Colors.white,
+                    ),
+                    child: const Text('Save Groq Settings'),
+                  ),
                 ),
               ],
             ),

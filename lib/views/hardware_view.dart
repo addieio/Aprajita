@@ -18,12 +18,14 @@ class HardwareView extends StatefulWidget {
 
 class _HardwareViewState extends State<HardwareView> with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  late TextEditingController _ipController;
   final List<String> _logs = [];
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
+    _ipController = TextEditingController(text: widget.hardwareService.espIp);
     widget.hardwareService.terminalLogStream.listen((log) {
       if (mounted) {
         setState(() {
@@ -37,6 +39,7 @@ class _HardwareViewState extends State<HardwareView> with SingleTickerProviderSt
   @override
   void dispose() {
     _tabController.dispose();
+    _ipController.dispose();
     super.dispose();
   }
 
@@ -128,16 +131,15 @@ class _HardwareViewState extends State<HardwareView> with SingleTickerProviderSt
                 indicatorWeight: 2.5,
                 labelColor: AppTheme.textPrimary,
                 unselectedLabelColor: AppTheme.textMuted,
-                isScrollable: true,
-                tabAlignment: TabAlignment.start,
+                isScrollable: false,
                 dividerColor: Colors.transparent,
-                labelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                unselectedLabelStyle: const TextStyle(fontSize: 12),
+                labelStyle: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
+                unselectedLabelStyle: const TextStyle(fontSize: 11),
                 tabs: const [
-                  Tab(icon: Icon(Icons.hub_rounded, size: 16), text: 'Status & Sim'),
+                  Tab(icon: Icon(Icons.hub_rounded, size: 16), text: 'Hardware Link'),
                   Tab(icon: Icon(Icons.build_circle_outlined, size: 16), text: 'Troubleshoot'),
-                  Tab(icon: Icon(Icons.terminal_rounded, size: 16), text: 'BLE Terminal'),
-                  Tab(icon: Icon(Icons.code_rounded, size: 16), text: 'ESP32 Code'),
+                  Tab(icon: Icon(Icons.terminal_rounded, size: 16), text: 'Terminal Log'),
+                  Tab(icon: Icon(Icons.code_rounded, size: 16), text: 'Firmware'),
                 ],
               ),
             ),
@@ -163,7 +165,7 @@ class _HardwareViewState extends State<HardwareView> with SingleTickerProviderSt
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        // Connection Bar
+        // Main Bluetooth Link Card
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
@@ -182,28 +184,27 @@ class _HardwareViewState extends State<HardwareView> with SingleTickerProviderSt
                 children: [
                   Row(
                     children: [
-                      Container(
-                        width: 12,
-                        height: 12,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: isConnected ? AppTheme.emerald : Colors.red,
-                        ),
+                      Icon(
+                        Icons.bluetooth_connected,
+                        color: isConnected ? AppTheme.emerald : Colors.blueAccent,
+                        size: 20,
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        isConnected ? 'ESP32 CONNECTED' : 'ESP32 DISCONNECTED',
+                        isConnected
+                            ? (hw.isSimulationMode ? 'SIMULATOR ACTIVE' : 'BLE LINKED: ${widget.hardwareService.bleDeviceName ?? "SURAKSHA-KEY"}')
+                            : 'BLUETOOTH LINK',
                         style: TextStyle(
-                          fontSize: 14,
+                          fontSize: 13,
                           fontWeight: FontWeight.bold,
-                          color: isConnected ? AppTheme.emerald : Colors.red,
+                          color: isConnected ? AppTheme.emerald : Colors.white,
                         ),
                       ),
                     ],
                   ),
                   Row(
                     children: [
-                      const Text('Simulation Mode', style: TextStyle(fontSize: 12, color: AppTheme.textMuted)),
+                      const Text('Sim Mode', style: TextStyle(fontSize: 11, color: AppTheme.textMuted)),
                       Switch(
                         value: hw.isSimulationMode,
                         activeThumbColor: AppTheme.indigo,
@@ -215,28 +216,247 @@ class _HardwareViewState extends State<HardwareView> with SingleTickerProviderSt
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
               Text(
-                'Device ID: ${hw.deviceId} • Firmware: ${hw.firmwareVersion}',
-                style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                isConnected
+                    ? '🟢 Paired with ESP32-C6 • Phone GPS streamed continuously • Hardware Wi-Fi ready for Twilio'
+                    : 'Pair your phone with Mochi ESP32 over Bluetooth to stream phone GPS & trigger SOS.',
+                style: const TextStyle(fontSize: 11.5, color: AppTheme.textSecondary),
               ),
               const SizedBox(height: 14),
+
+              // PRIMARY BLUETOOTH ACTION BUTTON
+              if (!isConnected)
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: widget.hardwareService.isScanning
+                        ? null
+                        : () async {
+                            final success = await widget.hardwareService.startBleScanAndConnect();
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    success
+                                        ? '🟢 Paired with SURAKSHA-KEY over Bluetooth! Streaming Phone GPS.'
+                                        : '⚠️ Could not find "SURAKSHA-KEY". Ensure ESP32 is powered on nearby.',
+                                  ),
+                                  backgroundColor: success ? AppTheme.emerald : AppTheme.amber,
+                                  duration: const Duration(seconds: 4),
+                                ),
+                              );
+                            }
+                          },
+                    icon: widget.hardwareService.isScanning
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Icon(Icons.bluetooth_searching, size: 18),
+                    label: Text(
+                      widget.hardwareService.isScanning
+                          ? 'Scanning for "SURAKSHA-KEY"...'
+                          : 'Connect via Bluetooth (1-Tap)',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blueAccent,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                )
+              else
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: AppTheme.emerald.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: AppTheme.emerald.withValues(alpha: 0.4)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: const [
+                          Icon(Icons.location_searching, size: 14, color: AppTheme.emerald),
+                          SizedBox(width: 6),
+                          Text(
+                            'Streaming Phone GPS over BLE',
+                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.emerald),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Spacer(),
+                    OutlinedButton(
+                      onPressed: () => widget.hardwareService.disconnect(),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.redAccent,
+                        side: const BorderSide(color: Colors.redAccent),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      ),
+                      child: const Text('Disconnect', style: TextStyle(fontSize: 11)),
+                    ),
+                  ],
+                ),
+
+              const SizedBox(height: 14),
+
+              // LIVE HARDWARE REMOTE CONTROLS
+              const Text('LIVE HARDWARE REMOTE CONTROLS (BLE):', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppTheme.emerald, letterSpacing: 0.5)),
+              const SizedBox(height: 8),
               Row(
                 children: [
                   Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: isConnected
-                          ? () => widget.hardwareService.disconnect()
-                          : () => widget.hardwareService.connectPhysicalHardware(),
-                      icon: Icon(isConnected ? Icons.bluetooth_disabled : Icons.bluetooth_searching),
-                      label: Text(isConnected ? 'Disconnect' : 'Scan & Pair SURAKSHA-KEY'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: isConnected ? AppTheme.cardElevated : AppTheme.indigo,
-                        foregroundColor: Colors.white,
-                      ),
+                    child: OutlinedButton.icon(
+                      icon: const Icon(Icons.face, size: 14),
+                      label: const Text('Face', style: TextStyle(fontSize: 11)),
+                      onPressed: () => widget.hardwareService.setEspScreen('FACES'),
+                      style: OutlinedButton.styleFrom(side: const BorderSide(color: AppTheme.borderSubtle)),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      icon: const Icon(Icons.cloud_outlined, size: 14),
+                      label: const Text('Weather', style: TextStyle(fontSize: 11)),
+                      onPressed: () => widget.hardwareService.setEspScreen('WEATHER'),
+                      style: OutlinedButton.styleFrom(side: const BorderSide(color: AppTheme.borderSubtle)),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      icon: const Icon(Icons.nightlight_round, size: 14, color: Colors.indigoAccent),
+                      label: const Text('Night Mode', style: TextStyle(fontSize: 10.5, color: Colors.indigoAccent)),
+                      onPressed: () => widget.hardwareService.setEspScreen('NIGHT_MODE'),
+                      style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.indigoAccent)),
                     ),
                   ),
                 ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: StreamBuilder<bool>(
+                      stream: widget.hardwareService.nightModeStream,
+                      initialData: false,
+                      builder: (btnCtx, snapshot) {
+                        final isNightActive = snapshot.data ?? false;
+                        return OutlinedButton.icon(
+                          icon: Icon(isNightActive ? Icons.shield : Icons.shield_outlined, size: 14, color: isNightActive ? AppTheme.emerald : Colors.white70),
+                          label: Text(
+                            isNightActive ? 'Night Watch: ACTIVE (10m Ping)' : 'Turn ON Night Watch',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: isNightActive ? AppTheme.emerald : Colors.white,
+                            ),
+                          ),
+                          onPressed: () async {
+                            final newState = !isNightActive;
+                            await widget.hardwareService.syncNightModeToEsp32(newState);
+                            if (!btnCtx.mounted) return;
+                            ScaffoldMessenger.of(btnCtx).showSnackBar(
+                              SnackBar(
+                                content: Text(newState
+                                    ? '🛡️ Night Watch Mode ACTIVATED! Location will share every 10 mins.'
+                                    : 'Night Watch Mode turned OFF.'),
+                                backgroundColor: newState ? AppTheme.emerald : AppTheme.cardElevated,
+                              ),
+                            );
+                          },
+                          style: OutlinedButton.styleFrom(
+                            side: BorderSide(color: isNightActive ? AppTheme.emerald : AppTheme.borderSubtle),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.warning_amber_rounded, size: 14),
+                    label: const Text('Test SOS', style: TextStyle(fontSize: 11)),
+                    onPressed: () async {
+                      final success = await widget.hardwareService.triggerEspSos();
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              success
+                                  ? '🚨 Real Twilio SOS Dispatched from ESP32 via Wi-Fi with Phone GPS!'
+                                  : '❌ Failed to reach ESP32.',
+                            ),
+                            backgroundColor: success ? AppTheme.crimson : AppTheme.amber,
+                          ),
+                        );
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(backgroundColor: AppTheme.crimson, foregroundColor: Colors.white),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 14),
+              const Divider(color: AppTheme.borderSubtle),
+
+              // OPTIONAL WI-FI IP FALLBACK
+              Theme(
+                data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                child: ExpansionTile(
+                  tilePadding: EdgeInsets.zero,
+                  title: const Text('Advanced: Wi-Fi / IP Direct Link', style: TextStyle(fontSize: 11.5, color: AppTheme.textSecondary)),
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: AppTheme.surfaceDark,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: AppTheme.borderSubtle),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.wifi, size: 16, color: AppTheme.textMuted),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: TextField(
+                              controller: _ipController,
+                              style: const TextStyle(fontSize: 12, color: AppTheme.textPrimary),
+                              decoration: const InputDecoration(
+                                hintText: 'ESP IP (e.g. 192.168.4.1)',
+                                border: InputBorder.none,
+                                isDense: true,
+                              ),
+                              onChanged: (val) => widget.hardwareService.espIp = val,
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: () => widget.hardwareService.connectRealEsp(_ipController.text),
+                            child: const Text('Connect IP', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.emerald)),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        ActionChip(
+                          label: const Text('SoftAP: 192.168.4.1', style: TextStyle(fontSize: 10, color: AppTheme.emerald)),
+                          backgroundColor: AppTheme.surfaceDark,
+                          onPressed: () {
+                            _ipController.text = '192.168.4.1';
+                            widget.hardwareService.connectRealEsp('192.168.4.1');
+                          },
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ],
           ),

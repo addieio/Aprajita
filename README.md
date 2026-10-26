@@ -1,134 +1,132 @@
-# Aprajita — Autonomous Safety & Emergency SOS System
+# Mochi Aegis — AI-Powered Lifestyle Companion & Autonomous Personal Guardian
 
-Aprajita is a mission-critical, dual-redundant emergency safety system designed for women's personal protection. It bridges physical embedded hardware with an offline-first Flutter companion application, providing resilient distress dispatch across multiple redundant pathways even under zero-connectivity or power-constrained conditions.
+Mochi Aegis is a hybrid hardware-and-mobile personal safety system designed for everyone—daily commuters, solo runners, students, shift workers, and elderly family members. It transforms personal safety from an awkward, reactive panic button into an expressive Everyday Carry (EDC) lifestyle smart keychain.
+
+Beneath its animated round display and lifestyle personas lies an autonomous defense architecture: physical multi-click interrupt triggers, low-latency BLE telemetry, peer-to-peer distress meshing, and an intelligent safety companion grounded in **Vectorize Hindsight** episodic long-term memory.
 
 ---
 
 ## 🏛️ System Architecture
 
-Aprajita operates across two interconnected domains: an autonomous physical wearable keychain and a mobile smartphone companion application.
+Mochi operates across two interconnected domains: a physical smart keychain wearable and a mobile smartphone companion application.
 
 ```mermaid
 graph TD
-    subgraph "Physical Wearable (Suraksha Key)"
-        BTN[Tactile SOS Button GPIO 4] -->|3 Rapid Clicks| ESP[ESP32 Microcontroller]
-        NEO[u-blox NEO-6M GPS] -->|NMEA Sentences| ESP
-        ESP -->|AT Commands UART2| A7670C[SIMCom A7670C 4G LTE]
-        A7670C -->|Direct Cellular SMS| TOWER[Cellular Base Station]
-        ESP <-->|BLE GATT Server| PHONE
+    subgraph "Physical Wearable (Mochi Smart Keychain)"
+        BTN[Tactile Action Button] -->|Single Click| MODE[Cycle Personas & Weather]
+        BTN -->|Long Press| NIGHT[Toggle Night Watch Mode]
+        BTN -->|Rapid Triple-Click| HARD_SOS[Immediate Silent SOS]
+        DISP[1.28-inch Round IPS Display] <--> ESP[ESP32-C6 Dual Core]
+        ESP <-->|BLE 5.0 GATT Link| PHONE
     end
 
-    subgraph "Companion Mobile Application (Flutter)"
-        PHONE[Android Smartphone]
-        VOL[Physical Volume Up Button] -->|4 Rapid Clicks| VOL_SVC[Volume Button Service]
-        VOL_SVC --> SOS_MGR[Emergency Service Engine]
-        UI_BTN[Touch SOS Button] --> SOS_MGR
-        SOS_MGR --> COUNTDOWN[Pre-Dispatch Abort Window]
-        COUNTDOWN --> DISPATCH[3-Channel Dispatch Gateway]
-        DISPATCH --> CH1[Channel 1: SMS with Google Maps Link]
-        DISPATCH --> CH2[Channel 2: Automated Voice Alert Call]
-        DISPATCH --> CH3[Channel 3: WhatsApp Distress Message]
-        DISPATCH --> COMMUNITY[Community Radar: Nearby Verified Responders]
+    subgraph "Mobile Companion App (Flutter + AI Engine)"
+        PHONE[Companion Smartphone]
+        AI[Conversational AI Agent Groq] <--> MEM[(Vectorize Hindsight Episodic Memory)]
+        WATCHDOG[Active Check-In Watchdog] --> FLASH[Urgent Flashing Modal: ARE YOU OKAY?]
+        FLASH -->|Safe Confirmed| MEM
+        FLASH -->|15s Timeout / SOS| ESCALATE[Escalation Protocol]
+        RADAR[Peer-to-Peer Distress Radar] <--> P2P[(Community Mesh)]
+        ESCALATE --> GATEWAY[Emergency Gateway]
     end
 
-    TOWER --> RECIPIENTS[Emergency Contacts]
-    CH1 --> RECIPIENTS
-    CH2 --> RECIPIENTS
-    CH3 --> RECIPIENTS
+    GATEWAY -->|Direct Emergency Alert with Live GPS| CONTACTS[Designated Emergency Contacts]
 ```
+
+> **Hardware Communication Note:** The current production release uses a cloud cellular gateway (Twilio) to handle instant emergency SMS and automated voice dispatch with live Google Maps telemetry. The next hardware iteration integrates dedicated onboard GNSS positioning and direct cellular SIM/GSM modules directly onto the PCB for 100% phone-independent standalone transmission.
 
 ---
 
-## ⚡ Core Subsystems & Technical Implementation
+## ⚡ Core Subsystems & Technical Capabilities
 
-### 1. Multi-Channel Emergency Dispatch Engine (`emergency_service.dart`)
-* **3-Channel Redundancy**: When an SOS event triggers, the dispatch engine activates three parallel communication channels:
-  * **Channel 1 (SMS)**: Dispatches automated distress SMS containing live coordinates and a direct Google Maps link.
-  * **Channel 2 (Voice Call)**: Initiates an automated voice phone call to speak synthesized emergency instructions to the recipient.
-  * **Channel 3 (WhatsApp)**: Formats and dispatches a rich WhatsApp distress message.
-* **Pre-Dispatch Abort Window**: Includes an audio-visual countdown modal (configurable duration) allowing users to cancel inadvertent alerts before dispatch occurs.
-* **State Machine Tracking**: Tracks individual recipient delivery statuses (`SUBMITTED`, `DELIVERED`, `FAILED`) with persistent event history.
+### 1. Episodic Long-Term Memory Engine (Vectorize Hindsight)
+Standard LLMs suffer from severe amnesia and cannot reliably manage safety check-ins or emergency protocols. Mochi integrates **Vectorize Hindsight** to give the companion long-term episodic vector memory across three primitives:
+* **Retain**: Every check-in preference, route corridor, emergency contact priority, and past incident timeline is ingested into the user's private episodic memory bank.
+* **Recall**: Queries vector memory before answering, strictly grounding the agent in verified facts (preventing hallucination of contact names, phone numbers, or escalation rules).
+* **Reflect**: Synthesizes cross-temporal longitudinal patterns across incidents and device diagnostics, preventing repetitive troubleshooting suggestions when hardware connection drops occur.
 
-### 2. Physical Button & Hardware Telemetry (`hardware_service.dart` & `suraksha_esp32_firmware.ino`)
-* **3-Press Tactile Keychain Policy**:
-  * The physical push button on ESP32 GPIO 4 employs an active-LOW interrupt with internal pullup resistors.
-  * Debounced triple-click detection requires 3 deliberate presses within a 1500ms time window to trigger an emergency, completely eliminating accidental pocket activations.
-* **Autonomous 4G Cellular Fail-Safe**:
-  * The SIMCom A7670C modem handles autonomous GSM communication. If the smartphone battery is depleted, the keychain operates standalone, querying its onboard NEO-6M GPS and transmitting emergency SMS directly over LTE.
-* **Non-Volatile Memory (NVS)**:
-  * Emergency recipient numbers are synchronized from the app into the ESP32's flash storage (`Preferences.h`), ensuring autonomous offline availability without reliance on a live BLE link.
-* **Hardware Diagnostic Engine**:
-  * Live monitoring of cellular CSQ signal strength, network registration status (`CREG`), SIM card readiness, and power supply health.
+### 2. Conversational Safety Watchdog & Flashing Check-In Modal
+* **Dynamic Natural Language Parser**: Extracts check-in durations from conversational phrases (*"Check on me in 10 minutes"*, *"Watch over me for 15 seconds"*, *"Remind me in 5"*).
+* **Deterministic Runtime Watchdog**: Immediately decouples the timer from the LLM, arming an active background countdown in the client.
+* **High-Impact Check-In Screen**:
+  * When the timer expires, an unmissable full-screen alert dialog flashes with a pulsing crimson border and repeating haptic vibration pulses.
+  * Prompts: **"ARE YOU OKAY? Any troubles or need assistance?"**
+  * **15-Second Grace Countdown**:
+    * **`I AM OKAY / SAFE ✅`**: Dismisses alert, logs safe confirmation streak to Hindsight memory bank.
+    * **`I NEED HELP! (SOS) 🚨`** or **Timer Expiration**: Automatically triggers emergency escalation, capturing live GPS fix and dispatching urgent alerts to primary contacts.
 
-### 3. Screen-Off Physical Trigger (`volume_button_service.dart`)
-* **4-Click Volume Up Pattern**:
-  * Intercepts Android physical volume keystrokes through native event listeners.
-  * Four rapid Volume Up button presses within 2.5 seconds automatically initiate the SOS pipeline, allowing discreet activation from inside a bag or pocket without looking at the screen.
+### 3. Tactile Multi-Click Hardware State Machine
+* **ESP32-C6 30ms Debounced GPIO Interrupts**:
+  * **Single Click**: Seamlessly cycles display dashboards (Animated Moods $\rightarrow$ Live Weather $\rightarrow$ Night Watch Mode $\rightarrow$ System Battery/Signal Telemetry).
+  * **Long Press**: Toggles autonomous Night Watch mode on or off.
+  * **Triple Click (<380ms)**: Discreet, silent emergency trigger that dispatches an immediate distress beacon without alerting an aggressor.
+* **Visual Expression Engine**:
+  * Drives a 240×240 circular GC9A01 IPS LCD with fluid expressive face animations (Happy, Alert, Curious, Sleepy, Focused).
+  * Supports real-time custom GIF and animation streaming over Bluetooth LE.
 
-### 4. Dual Location Engine (`location_service.dart`)
-* **Hybrid Positioning**: Fuses Assisted-GPS from the mobile device with hardware NMEA coordinates from the u-blox NEO-6M module.
-* **Continuous BLE Reverse Sync**: The phone continuously pushes fresh high-accuracy coordinates to the ESP32 every 10 seconds over BLE characteristic `CHAR_PHONE_GPS`.
-* **Dynamic Geolocation Links**: Automatically generates standard Google Maps navigation URLs (`https://maps.google.com/?q={lat},{lng}`) with precision timestamps.
+### 4. Autonomous Night Watch Mode & Stagnation Detection
+* **Periodic Breadcrumb Telemetry**: Automatically broadcasts location updates at regular 10-minute intervals while traveling through unfamiliar transit zones or late-night corridors.
+* **Stagnation Anomaly Detection**: If position coordinates remain motionless ($<15\text{m}$) for $>10$ minutes in an unscheduled area, the system flags an anomaly and initiates an urgent check-in sequence.
 
-### 5. Peer-to-Peer Community Radar (`nearby_service.dart`, `supabase_service.dart`)
-* **Haversine Geofencing**: Computes real-time spherical distances between the victim and nearby registered safety network members.
-* **Proximity Filtering**: Configurable beaconing radius (1 km to 10 km) to alert local verified community members for immediate physical intervention.
+### 5. Peer-to-Peer Community Radar
+* **Spherical Geofencing (Haversine)**: Calculates distances between an alert beacon and verified community responders within a 1 km to 10 km radius.
+* **Rapid Civilian Assistance**: Alerts local volunteers for immediate physical intervention before first responders can reach the scene.
 
-### 6. Design System & Aesthetics (`app_theme.dart`, `app_logo.dart`)
-* **Obsidian Palette**: Built on an ultra-dark theme (`#0C0D12` background, `#171A24` cards, `#262B3A` hairline borders, `#E53935` soft crimson accents).
-* **Minimalist Brand Emblem**: Monoline vector protective shield integrating an abstract stylized "A" crest.
-* **Clean Single-AppBar Architecture**: Unified navigation shell eliminating nested app bars, utilizing modular in-page section headers.
+### 6. Screen-Off Physical Volume Trigger
+* **Quad-Click Volume Pattern**: Native Android keystroke listeners intercept physical volume button presses. Four rapid clicks within 2.5 seconds initiate the emergency sequence without requiring the user to unlock or look at the screen.
 
 ---
 
 ## 📁 Repository Directory Structure
 
 ```
-aprajita_app/
-├── android/                         # Android native project, permissions & Gradle configuration
-├── assets/
-│   └── images/
-│       ├── logo.png                 # Scalable minimalist brand emblem
-│       └── logo.jpg                 # Fallback launcher asset
-├── lib/
-│   ├── main.dart                    # Application bootstrap, AppShell & global countdown overlay
-│   ├── models/
-│   │   ├── contact_model.dart       # Trusted contact entity, E.164 phone validator
-│   │   ├── location_model.dart      # GPS coordinates, Haversine spherical distance logic
-│   │   ├── nearby_alert_model.dart  # Community radar distress payload
-│   │   ├── sos_event_model.dart     # SOS event lifecycle, SMS delivery states
-│   │   └── telemetry_model.dart     # ESP32, A7670C CSQ, & NEO-6M satellite telemetry
-│   ├── services/
-│   │   ├── emergency_service.dart   # Central SOS coordinator, multi-channel dispatch
-│   │   ├── hardware_service.dart    # BLE GATT manager & hardware diagnostic simulator
-│   │   ├── location_service.dart    # Phone GPS provider, location stream & permissions
-│   │   ├── nearby_service.dart      # Peer safety radar & proximity filtering
-│   │   ├── storage_service.dart     # SharedPreferences persistence & cache manager
-│   │   ├── supabase_service.dart    # Realtime community backend connector & SQL schema
-│   │   ├── twilio_service.dart      # REST client for SMS, Voice Call & WhatsApp dispatch
-│   │   └── volume_button_service.dart# 4-Click Volume Up hardware trigger listener
-│   ├── theme/
-│   │   └── app_theme.dart           # Obsidian dark palette, tokens & typography
-│   ├── views/
-│   │   ├── contacts_view.dart       # Trusted contacts management & ESP32 sync
-│   │   ├── hardware_view.dart       # Hardware diagnostics, BLE terminal & simulator
-│   │   ├── history_view.dart        # Incident history log & delivery verification
-│   │   ├── home_view.dart           # Dashboard, readiness beacon & SOS trigger
-│   │   ├── nearby_view.dart         # Community radar & localized distress feed
-│   │   └── settings_view.dart       # Gateway configuration & countdown timers
-│   └── widgets/
-│       ├── app_logo.dart            # Minimalist vector logo badge & custom painter
-│       └── sos_countdown_dialog.dart# Pre-dispatch cancellation overlay modal
-├── test/
-│   └── widget_test.dart             # Phone validation & distance calculation unit tests
-├── suraksha_esp32_firmware.ino       # Complete C++ firmware for ESP32 Dev Module
-└── pubspec.yaml                     # Dependencies & project metadata
+├── aprajita_app/                          # Flutter Mobile Application
+│   ├── android/                          # Android native project & permissions
+│   ├── assets/                           # Branding assets, logos, and vector icons
+│   ├── lib/
+│   │   ├── main.dart                     # App bootstrap, navigation shell, global overlay
+│   │   ├── models/                       # Data models (contacts, location, telemetry, SOS events)
+│   │   ├── services/
+│   │   │   ├── emergency_service.dart    # SOS escalation engine & multi-channel dispatcher
+│   │   │   ├── groq_service.dart         # LLM completion with Hindsight memory grounding
+│   │   │   ├── hardware_service.dart     # BLE GATT client, telemetry parser & command pipe
+│   │   │   ├── hindsight_service.dart    # Vectorize Hindsight API client (Retain, Recall, Reflect)
+│   │   │   ├── location_service.dart     # High-accuracy GPS location stream & reverse sync
+│   │   │   ├── nearby_community_service.dart # Peer-to-peer distress radar
+│   │   │   ├── storage_service.dart      # Encrypted local preferences & credentials store
+│   │   │   ├── twilio_service.dart       # Emergency cellular gateway
+│   │   │   └── volume_button_service.dart# Screen-off volume button interrupt detector
+│   │   ├── theme/                        # Obsidian dark design system & typography tokens
+│   │   ├── views/
+│   │   │   ├── ai_companion_view.dart    # AI safety chat, active watch timer, flashing modal
+│   │   │   ├── contacts_view.dart        # Emergency contacts manager & priority sync
+│   │   │   ├── gif_customizer_view.dart  # Animation studio for round display streaming
+│   │   │   ├── hardware_view.dart        # BLE connection manager, diagnostics, battery status
+│   │   │   ├── history_view.dart         # Historical SOS incident timeline & logs
+│   │   │   ├── home_view.dart            # Main dashboard, quick SOS button & status cards
+│   │   │   ├── nearby_view.dart          # Community responder radar map
+│   │   │   └── settings_view.dart        # API keys, bank IDs, and threshold settings
+│   │   └── widgets/                      # Reusable UI components & dialogs
+│   └── firmware/                         # Microcontroller Firmware
+│       └── Mochi_ESP32C6_Emotion_Keychain/
+│           ├── Mochi_ESP32C6_Emotion_Keychain.ino # Production ESP32-C6 firmware
+│           ├── mochi_emotions.h          # Bitmap graphics & animation frames
+│           └── partitions.csv            # Extended app partition scheme
+└── Aprajita_Companion_App.apk            # Pre-compiled Android release build
 ```
 
 ---
 
-## 🔒 Security & Privacy Architecture
+## 🛡️ Privacy, Security & Data Safety
 
-* **Zero Hardcoded Secrets**: All third-party gateway credentials, phone numbers, and cloud tokens are managed through local device encrypted storage and user configuration.
-* **Offline-First Resilience**: All core emergency features operate without external cloud connectivity when paired with the physical hardware module.
-* **Accidental Trigger Safeguards**: Hardware debouncing algorithms and software countdown buffers prevent unintentional dispatches.
+* **No Surveillance Tracking**: Location data is never broadcast continuously under normal operation. GPS fixes are only queried when the user explicitly arms Night Watch mode, initiates a check-in, or triggers an SOS.
+* **Isolated Memory Banks**: Vectorize Hindsight episodic memories are partitioned into private memory bank IDs, preventing cross-tenant leakage.
+* **Deterministic Fail-Safes**: All physical triggers and watchdogs execute in deterministic compiled code, ensuring that network latency or LLM unavailability never prevents an emergency signal from firing.
+
+---
+
+## 🔮 Hardware Roadmap
+
+* **Phase 1 (Current)**: ESP32-C6 smart keychain with circular IPS display, Bluetooth LE companion sync, cloud cellular gateway, and Vectorize Hindsight episodic memory.
+* **Phase 2 (In Development)**: Custom unibody CNC aluminum enclosure, IP68 water resistance, magnetic wireless charging dock.
+* **Phase 3 (Hardware Integration)**: Dedicated onboard multi-constellation GNSS (GPS/GLONASS/Galileo) receiver and integrated 4G Cat-1 SIM/GSM module directly on the hardware for standalone cellular distress transmission independent of any smartphone.

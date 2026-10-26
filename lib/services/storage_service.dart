@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/contact_model.dart';
@@ -14,8 +15,12 @@ class StorageService {
   static const String _keyPrimaryContactId = 'aprajita_primary_contact_id';
 
   final SharedPreferences _prefs;
+  final StreamController<List<TrustedContact>> _contactsStreamController =
+      StreamController<List<TrustedContact>>.broadcast();
 
   StorageService(this._prefs);
+
+  Stream<List<TrustedContact>> get contactsStream => _contactsStreamController.stream;
 
   static Future<StorageService> init() async {
     final prefs = await SharedPreferences.getInstance();
@@ -25,33 +30,90 @@ class StorageService {
   // --- CONTACTS ---
   List<TrustedContact> loadContacts() {
     final raw = _prefs.getString(_keyContacts);
-    final defaultContact = TrustedContact(
-      id: 'contact-primary-default',
-      name: 'Primary Contact',
-      phone: '+91 98765 43210',
-      isEmergencyRecipient: true,
-      isPrimary: true,
-      syncedToKeychain: false,
-    );
-
-    if (raw == null || raw.isEmpty) {
-      return [defaultContact];
+    if (raw == null) {
+      // First launch: pre-load clean default emergency contacts
+      return [
+        TrustedContact(
+          id: 'contact-primary-default',
+          name: 'Primary Contact',
+          phone: '+919876543210',
+          isEmergencyRecipient: true,
+          isPrimary: true,
+          syncedToKeychain: true,
+        ),
+        TrustedContact(
+          id: 'contact-secondary-default',
+          name: 'Secondary Contact',
+          phone: '+919876543211',
+          isEmergencyRecipient: true,
+          isPrimary: false,
+          syncedToKeychain: true,
+        ),
+      ];
     }
+
+    if (raw.trim().isEmpty || raw.trim() == '[]') {
+      return [];
+    }
+
     try {
       final List<dynamic> list = jsonDecode(raw);
-      final contacts = list.map((e) => TrustedContact.fromJson(e)).toList();
-      if (contacts.isEmpty) {
-        return [defaultContact];
-      }
-      return contacts;
+      return list.map((e) => TrustedContact.fromJson(e)).toList();
     } catch (_) {
-      return [defaultContact];
+      return [];
     }
   }
 
   Future<void> saveContacts(List<TrustedContact> contacts) async {
     final raw = jsonEncode(contacts.map((c) => c.toJson()).toList());
     await _prefs.setString(_keyContacts, raw);
+
+    // Keep primary contact ID valid
+    final currentPrimaryId = getPrimaryContactId();
+    if (contacts.isEmpty) {
+      await _prefs.setString(_keyPrimaryContactId, '');
+    } else if (currentPrimaryId != null &&
+        currentPrimaryId.isNotEmpty &&
+        !contacts.any((c) => c.id == currentPrimaryId)) {
+      // Current primary was deleted, pick the first remaining contact
+      await _prefs.setString(_keyPrimaryContactId, contacts.first.id);
+    } else if (currentPrimaryId == null || currentPrimaryId.isEmpty) {
+      final primary = contacts.firstWhere(
+        (c) => c.isPrimary,
+        orElse: () => contacts.first,
+      );
+      await _prefs.setString(_keyPrimaryContactId, primary.id);
+    }
+
+    _contactsStreamController.add(contacts);
+  }
+
+  Future<void> addContact(TrustedContact contact) async {
+    final list = loadContacts();
+    final index = list.indexWhere((c) => c.id == contact.id);
+    if (index >= 0) {
+      list[index] = contact;
+    } else {
+      list.add(contact);
+    }
+    await saveContacts(list);
+  }
+
+  Future<void> updateContact(TrustedContact contact) async {
+    final list = loadContacts();
+    final index = list.indexWhere((c) => c.id == contact.id);
+    if (index >= 0) {
+      list[index] = contact;
+    } else {
+      list.add(contact);
+    }
+    await saveContacts(list);
+  }
+
+  Future<void> deleteContact(String contactId) async {
+    final list = loadContacts();
+    final updated = list.where((c) => c.id != contactId).toList();
+    await saveContacts(updated);
   }
 
   // --- PRIMARY CONTACT SELECTOR ---
@@ -61,6 +123,7 @@ class StorageService {
 
   Future<void> setPrimaryContactId(String id) async {
     await _prefs.setString(_keyPrimaryContactId, id);
+    _contactsStreamController.add(loadContacts());
   }
 
   // --- SOS HISTORY ---
@@ -114,20 +177,19 @@ class StorageService {
         'phoneNo': '',
         'accountSid': '',
         'authToken': '',
-        'whatsappFrom': '+14155238886',
+        'whatsappFrom': '',
         'enabled': 'false',
       };
     }
     try {
       final map = Map<String, String>.from(jsonDecode(raw));
-      map.putIfAbsent('whatsappFrom', () => '+14155238886');
       return map;
     } catch (_) {
       return {
         'phoneNo': '',
         'accountSid': '',
         'authToken': '',
-        'whatsappFrom': '+14155238886',
+        'whatsappFrom': '',
         'enabled': 'false',
       };
     }
@@ -161,7 +223,11 @@ class StorageService {
     try {
       return Map<String, String>.from(jsonDecode(raw));
     } catch (_) {
-      return {'url': '', 'anonKey': '', 'enabled': 'false'};
+      return {
+        'url': '',
+        'anonKey': '',
+        'enabled': 'false',
+      };
     }
   }
 
@@ -176,6 +242,118 @@ class StorageService {
       'enabled': enabled.toString(),
     };
     await _prefs.setString(_keySupabaseConfig, jsonEncode(map));
+  }
+
+  // --- HINDSIGHT CONFIG ---
+  static const String _keyHindsightConfig = 'aprajita_hindsight_config_v2';
+  Map<String, String> loadHindsightConfig() {
+    final raw = _prefs.getString(_keyHindsightConfig);
+    if (raw == null || raw.isEmpty) {
+      return {
+        'apiKey': '',
+        'bankId': 'mochi_safety',
+        'baseUrl': 'https://api.hindsight.vectorize.io',
+        'enabled': 'false',
+      };
+    }
+    try {
+      return Map<String, String>.from(jsonDecode(raw));
+    } catch (_) {
+      return {
+        'apiKey': '',
+        'bankId': 'mochi_safety',
+        'baseUrl': 'https://api.hindsight.vectorize.io',
+        'enabled': 'false',
+      };
+    }
+  }
+
+  Future<void> saveHindsightConfig({
+    required String apiKey,
+    required String bankId,
+    String baseUrl = 'https://api.hindsight.vectorize.io',
+    bool enabled = true,
+  }) async {
+    final map = {
+      'apiKey': apiKey.trim(),
+      'bankId': bankId.trim(),
+      'baseUrl': baseUrl.trim(),
+      'enabled': enabled.toString(),
+    };
+    await _prefs.setString(_keyHindsightConfig, jsonEncode(map));
+  }
+
+  // --- GROQ CONFIG ---
+  static const String _keyGroqConfig = 'aprajita_groq_config';
+  Map<String, String> loadGroqConfig() {
+    final raw = _prefs.getString(_keyGroqConfig);
+    if (raw == null || raw.isEmpty) {
+      return {
+        'apiKey': '',
+        'model': 'openai/gpt-oss-120b',
+        'enabled': 'false',
+      };
+    }
+    try {
+      return Map<String, String>.from(jsonDecode(raw));
+    } catch (_) {
+      return {
+        'apiKey': '',
+        'model': 'openai/gpt-oss-120b',
+        'enabled': 'false',
+      };
+    }
+  }
+
+  Future<void> saveGroqConfig({
+    required String apiKey,
+    String model = 'openai/gpt-oss-120b',
+    bool enabled = true,
+  }) async {
+    final map = {
+      'apiKey': apiKey.trim(),
+      'model': model.trim(),
+      'enabled': enabled.toString(),
+    };
+    await _prefs.setString(_keyGroqConfig, jsonEncode(map));
+  }
+
+  // --- CUSTOM GIF / ANIMATION CONFIG ---
+  static const String _keyGifPreset = 'aprajita_gif_preset';
+  static const String _keyGifFps = 'aprajita_gif_fps';
+  static const String _keyGifClockFormat24 = 'aprajita_gif_clock24';
+  static const String _keyGifShowBattery = 'aprajita_gif_show_battery';
+
+  String getCustomGifPreset() {
+    return _prefs.getString(_keyGifPreset) ?? 'mochi_happy';
+  }
+
+  Future<void> setCustomGifPreset(String preset) async {
+    await _prefs.setString(_keyGifPreset, preset);
+  }
+
+  int getCustomGifFps() {
+    return _prefs.getInt(_keyGifFps) ?? 10;
+  }
+
+  Future<void> setCustomGifFps(int fps) async {
+    await _prefs.setInt(_keyGifFps, fps);
+  }
+
+  bool getCustomGifClock24() {
+    return _prefs.getBool(_keyGifClockFormat24) ?? true;
+  }
+
+  Future<void> setCustomGifClock24(bool is24) async {
+    await _prefs.setBool(_keyGifClockFormat24, is24);
+  }
+
+  bool getCustomGifShowBattery() {
+    return _prefs.getBool(_keyGifShowBattery) ?? true;
+  }
+
+  Future<void> setCustomGifShowBattery(bool show) async {
+    await _prefs.setBool(_keyGifShowBattery, show);
   }
 
   // --- OFFLINE QUEUE (For alerts triggered when offline) ---

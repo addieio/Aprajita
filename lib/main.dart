@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'theme/app_theme.dart';
@@ -18,6 +19,11 @@ import 'widgets/sos_countdown_dialog.dart';
 import 'widgets/app_logo.dart';
 import 'services/volume_button_service.dart';
 
+import 'services/hindsight_service.dart';
+import 'services/groq_service.dart';
+import 'views/ai_companion_view.dart';
+import 'views/gif_customizer_view.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setPreferredOrientations([
@@ -31,6 +37,19 @@ void main() async {
   final twilioService = TwilioService(storageService);
   final supabaseService = SupabaseService(storageService);
   final nearbyService = NearbyCommunityService(supabaseService);
+  final hindsightService = HindsightService(storageService);
+  final groqService = GroqService(storageService, hindsightService);
+
+  // Pipe phone GPS coordinates live to physical ESP32 over BLE
+  locationService.locationStream.listen((loc) {
+    hardwareService.sendPhoneGpsToEsp32(loc.lat, loc.lng, loc.accuracy);
+  });
+  Timer.periodic(const Duration(seconds: 8), (_) async {
+    final loc = locationService.currentLocation;
+    if (loc != null) {
+      hardwareService.sendPhoneGpsToEsp32(loc.lat, loc.lng, loc.accuracy);
+    }
+  });
 
   final emergencyService = EmergencyService(
     storageService: storageService,
@@ -38,6 +57,7 @@ void main() async {
     locationService: locationService,
     hardwareService: hardwareService,
     nearbyService: nearbyService,
+    hindsightService: hindsightService,
   );
 
   final volumeButtonService = VolumeButtonService(
@@ -55,6 +75,8 @@ void main() async {
     nearbyService: nearbyService,
     emergencyService: emergencyService,
     volumeButtonService: volumeButtonService,
+    hindsightService: hindsightService,
+    groqService: groqService,
   ));
 }
 
@@ -67,6 +89,8 @@ class AprajitaApp extends StatelessWidget {
   final NearbyCommunityService nearbyService;
   final EmergencyService emergencyService;
   final VolumeButtonService volumeButtonService;
+  final HindsightService hindsightService;
+  final GroqService groqService;
 
   const AprajitaApp({
     super.key,
@@ -78,12 +102,14 @@ class AprajitaApp extends StatelessWidget {
     required this.nearbyService,
     required this.emergencyService,
     required this.volumeButtonService,
+    required this.hindsightService,
+    required this.groqService,
   });
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Aprajita - Women Safety & Hardware SOS',
+      title: 'Mochi Aegis - AI Safety Agent',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.darkTheme,
       home: AppShell(
@@ -95,6 +121,8 @@ class AprajitaApp extends StatelessWidget {
         nearbyService: nearbyService,
         emergencyService: emergencyService,
         volumeButtonService: volumeButtonService,
+        hindsightService: hindsightService,
+        groqService: groqService,
       ),
     );
   }
@@ -109,6 +137,8 @@ class AppShell extends StatefulWidget {
   final NearbyCommunityService nearbyService;
   final EmergencyService emergencyService;
   final VolumeButtonService volumeButtonService;
+  final HindsightService hindsightService;
+  final GroqService groqService;
 
   const AppShell({
     super.key,
@@ -120,6 +150,8 @@ class AppShell extends StatefulWidget {
     required this.nearbyService,
     required this.emergencyService,
     required this.volumeButtonService,
+    required this.hindsightService,
+    required this.groqService,
   });
 
   @override
@@ -138,24 +170,29 @@ class _AppShellState extends State<AppShell> {
         locationService: widget.locationService,
         storageService: widget.storageService,
         twilioService: widget.twilioService,
-        onNavigateToContacts: () => setState(() => _currentIndex = 1),
+        onNavigateToContacts: () => setState(() => _currentIndex = 4),
         onNavigateToHardware: () => setState(() => _currentIndex = 2),
+        onNavigateToAi: () => setState(() => _currentIndex = 1),
+        onNavigateToGif: () => setState(() => _currentIndex = 3),
+      ),
+      AiCompanionView(
+        groqService: widget.groqService,
+        hindsightService: widget.hindsightService,
+        storageService: widget.storageService,
+        twilioService: widget.twilioService,
+        locationService: widget.locationService,
+      ),
+      HardwareView(
+        hardwareService: widget.hardwareService,
+      ),
+      GifCustomizerView(
+        storageService: widget.storageService,
+        hardwareService: widget.hardwareService,
       ),
       ContactsView(
         storageService: widget.storageService,
         hardwareService: widget.hardwareService,
         twilioService: widget.twilioService,
-      ),
-      HardwareView(
-        hardwareService: widget.hardwareService,
-      ),
-      NearbyView(
-        nearbyService: widget.nearbyService,
-        locationService: widget.locationService,
-        supabaseService: widget.supabaseService,
-      ),
-      HistoryView(
-        storageService: widget.storageService,
       ),
     ];
 
@@ -166,6 +203,36 @@ class _AppShellState extends State<AppShell> {
           bottom: BorderSide(color: AppTheme.borderSubtle, width: 0.8),
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.near_me_outlined, size: 20),
+            tooltip: 'Nearby Distress Radar',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (ctx) => NearbyView(
+                    nearbyService: widget.nearbyService,
+                    locationService: widget.locationService,
+                    supabaseService: widget.supabaseService,
+                  ),
+                ),
+              );
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.history_rounded, size: 20),
+            tooltip: 'SOS History',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (ctx) => HistoryView(
+                    storageService: widget.storageService,
+                  ),
+                ),
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.tune_rounded, size: 20),
             tooltip: 'Settings',
@@ -243,6 +310,22 @@ class _AppShellState extends State<AppShell> {
           ),
         ],
       ),
+      floatingActionButton: _currentIndex != 1
+          ? FloatingActionButton.extended(
+              onPressed: () => setState(() => _currentIndex = 1),
+              backgroundColor: const Color(0xFF10B981),
+              icon: const Icon(Icons.smart_toy_rounded, color: Colors.white, size: 20),
+              label: const Text(
+                'AI Safety Agent',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                  letterSpacing: 0.3,
+                  fontSize: 13,
+                ),
+              ),
+            )
+          : null,
       bottomNavigationBar: Container(
         decoration: const BoxDecoration(
           color: AppTheme.surfaceDark,
@@ -251,9 +334,12 @@ class _AppShellState extends State<AppShell> {
           ),
         ),
         child: BottomNavigationBar(
+          type: BottomNavigationBarType.fixed,
           currentIndex: _currentIndex,
           onTap: (index) => setState(() => _currentIndex = index),
-          backgroundColor: Colors.transparent,
+          backgroundColor: AppTheme.surfaceDark,
+          selectedItemColor: AppTheme.crimson,
+          unselectedItemColor: Colors.white70,
           elevation: 0,
           selectedLabelStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.3),
           unselectedLabelStyle: const TextStyle(fontSize: 10, letterSpacing: 0.2),
@@ -264,9 +350,9 @@ class _AppShellState extends State<AppShell> {
               label: 'Home',
             ),
             BottomNavigationBarItem(
-              icon: Icon(Icons.people_outline),
-              activeIcon: Icon(Icons.people),
-              label: 'Contacts',
+              icon: Icon(Icons.psychology_outlined),
+              activeIcon: Icon(Icons.psychology),
+              label: 'AI Agent',
             ),
             BottomNavigationBarItem(
               icon: Icon(Icons.memory_outlined),
@@ -274,14 +360,14 @@ class _AppShellState extends State<AppShell> {
               label: 'Hardware',
             ),
             BottomNavigationBarItem(
-              icon: Icon(Icons.near_me_outlined),
-              activeIcon: Icon(Icons.near_me),
-              label: 'Nearby',
+              icon: Icon(Icons.animation_outlined),
+              activeIcon: Icon(Icons.animation),
+              label: 'Screen GIF',
             ),
             BottomNavigationBarItem(
-              icon: Icon(Icons.history_outlined),
-              activeIcon: Icon(Icons.history),
-              label: 'History',
+              icon: Icon(Icons.people_outline),
+              activeIcon: Icon(Icons.people),
+              label: 'Contacts',
             ),
           ],
         ),
