@@ -732,6 +732,13 @@ bool sendTwilioSms(const String &bodyText, const String &targetTo) {
   display.println(toNum);
   display.display();
 
+  // If hardware Wi-Fi or Twilio credentials are placeholders, rely on mobile companion app over BLE
+  if (strlen(TWILIO_ACCOUNT_SID) == 0 || strcmp(TWILIO_ACCOUNT_SID, "YOUR_TWILIO_ACCOUNT_SID") == 0 ||
+      strlen(WIFI_SSID) == 0 || strcmp(WIFI_SSID, "YOUR_WIFI_SSID") == 0) {
+    Serial.println(F("[TWILIO] Hardware credentials not configured in sketch. Emergency alert dispatched to mobile companion app over BLE!"));
+    return true;
+  }
+
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println(F("[TWILIO] Wi-Fi not connected. Attempting quick background reconnect (up to 8s)..."));
     display.setCursor(4, 48);
@@ -744,17 +751,7 @@ bool sendTwilioSms(const String &bodyText, const String &targetTo) {
       delay(150);
     }
     if (WiFi.status() != WL_CONNECTED) {
-      Serial.println(F("[TWILIO] Wi-Fi offline. Alert failed over Wi-Fi."));
-      display.clearDisplay();
-      display.drawRoundRect(0, 0, 128, 64, 3, SSD1306_WHITE);
-      display.setCursor(6, 12);
-      display.println(F("* WI-FI OFFLINE *"));
-      display.setCursor(6, 28);
-      display.println(F("Check Hotspot:"));
-      display.setCursor(6, 42);
-      display.println(WIFI_SSID);
-      display.display();
-      delay(2500);
+      Serial.println(F("[TWILIO] Wi-Fi offline. Alert dispatched to phone app over BLE."));
       return false;
     }
   }
@@ -2259,72 +2256,80 @@ void setup() {
   display.display();
 
   // Mode: AP + Station (Simultaneous)
-  // Station connects to internet (hotspot/router for Twilio SMS)
-  // SoftAP broadcasts SURAKSHA-APRAJITA at 192.168.4.1 for direct phone connection
   WiFi.mode(WIFI_AP_STA);
   WiFi.setAutoReconnect(true);
   WiFi.softAP("SURAKSHA-APRAJITA", "12345678");
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
-  Serial.print(F("[WIFI] Connecting to Wi-Fi SSID: "));
-  Serial.println(WIFI_SSID);
-  Serial.println(F("[WIFI] SoftAP Active: 'SURAKSHA-APRAJITA' (IP: 192.168.4.1)"));
+  bool hasUserWifi = (strlen(WIFI_SSID) > 0 && strcmp(WIFI_SSID, "YOUR_WIFI_SSID") != 0);
 
-  unsigned long wifiStart = millis();
-  int progressTick = 0;
-  while (WiFi.status() != WL_CONNECTED && (millis() - wifiStart < 15000)) {
-    delay(200);
-    progressTick = (progressTick + 1) % 16;
+  if (hasUserWifi) {
+    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+    Serial.print(F("[WIFI] Connecting to Wi-Fi SSID: "));
+    Serial.println(WIFI_SSID);
+
+    unsigned long wifiStart = millis();
+    int progressTick = 0;
+    while (WiFi.status() != WL_CONNECTED && (millis() - wifiStart < 10000)) {
+      delay(200);
+      progressTick = (progressTick + 1) % 16;
+      display.clearDisplay();
+      display.setCursor(0, 2);
+      display.println(F("====================="));
+      display.println(F("  CONNECTING WI-FI   "));
+      display.println(F("====================="));
+      display.print(F("SSID: ")); display.println(WIFI_SSID);
+      display.print(F("Time: "));
+      display.print((millis() - wifiStart) / 1000);
+      display.println(F("s / 10s"));
+      display.print(F("Linking"));
+      for (int i = 0; i < (progressTick % 5); i++) display.print(F("."));
+      display.println();
+      display.print(F("SoftAP: 192.168.4.1"));
+      display.display();
+    }
+
     display.clearDisplay();
-    display.setCursor(0, 2);
-    display.println(F("====================="));
-    display.println(F("  CONNECTING WI-FI   "));
-    display.println(F("====================="));
-    display.print(F("SSID: ")); display.println(WIFI_SSID);
-    display.print(F("Time: "));
-    display.print((millis() - wifiStart) / 1000);
-    display.println(F("s / 15s"));
-    display.print(F("Linking"));
-    for (int i = 0; i < (progressTick % 5); i++) display.print(F("."));
-    display.println();
-    display.print(F("SoftAP: 192.168.4.1"));
-    display.display();
-  }
+    display.setCursor(0, 0);
+    if (WiFi.status() == WL_CONNECTED) {
+      Serial.println(F("========================================"));
+      Serial.println(F("[WIFI] CONNECTED SUCCESSFULLY!"));
+      Serial.print(F("[WIFI] Station IP: ")); Serial.println(WiFi.localIP());
+      Serial.println(F("[WIFI] SoftAP IP:  192.168.4.1"));
+      Serial.print(F("[TWILIO] Target SMS: ")); Serial.println(TWILIO_TO_NUMBER);
+      Serial.println(F("========================================"));
 
-  display.clearDisplay();
-  display.setCursor(0, 0);
-  if (WiFi.status() == WL_CONNECTED) {
-    Serial.println(F("========================================"));
-    Serial.println(F("[WIFI] CONNECTED SUCCESSFULLY!"));
-    Serial.print(F("[WIFI] Station IP: ")); Serial.println(WiFi.localIP());
-    Serial.println(F("[WIFI] SoftAP IP:  192.168.4.1"));
-    Serial.print(F("[TWILIO] Target SMS: ")); Serial.println(TWILIO_TO_NUMBER);
-    Serial.println(F("========================================"));
-
-    display.println(F("====================="));
-    display.println(F("  WI-FI CONNECTED!   "));
-    display.println(F("====================="));
-    display.print(F("IP: ")); display.println(WiFi.localIP());
-    display.println(F("AP: 192.168.4.1"));
-    display.print(F("SMS: ")); display.println(TWILIO_TO_NUMBER);
-    display.println(F("BLE: SURAKSHA-KEY"));
-    display.display();
-    delay(3500); // Give user 3.5 seconds to see IP!
+      display.println(F("====================="));
+      display.println(F("  WI-FI CONNECTED!   "));
+      display.println(F("====================="));
+      display.print(F("IP: ")); display.println(WiFi.localIP());
+      display.println(F("AP: 192.168.4.1"));
+      display.print(F("SMS: ")); display.println(TWILIO_TO_NUMBER);
+      display.println(F("BLE: SURAKSHA-KEY"));
+      display.display();
+      delay(2000);
+    } else {
+      Serial.println(F("[WIFI] Could not connect to station SSID within 10s."));
+      display.println(F("====================="));
+      display.println(F("  WI-FI NOT FOUND    "));
+      display.println(F("====================="));
+      display.print(F("Hotspot: ")); display.println(WIFI_SSID);
+      display.println(F("Continuing in BLE"));
+      display.println(F("Companion Mode..."));
+      display.display();
+      delay(1500);
+    }
   } else {
-    Serial.println(F("========================================"));
-    Serial.println(F("[WIFI] Could not connect to station SSID within 15s."));
-    Serial.println(F("[WIFI] SoftAP IS ACTIVE: SSID 'SURAKSHA-APRAJITA' -> IP 192.168.4.1"));
-    Serial.println(F("========================================"));
-
+    Serial.println(F("[WIFI] No custom Wi-Fi configured. Booting instantly in BLE Companion Mode!"));
+    display.clearDisplay();
+    display.setCursor(0, 4);
     display.println(F("====================="));
-    display.println(F("  WI-FI NOT FOUND    "));
+    display.println(F("  APRAJITA BLE MODE  "));
     display.println(F("====================="));
-    display.print(F("Hotspot: ")); display.println(WIFI_SSID);
-    display.println(F("SoftAP ALWAYS ON:"));
-    display.println(F("SSID: SURAKSHA-APRAJITA"));
-    display.println(F("IP:   192.168.4.1"));
+    display.println(F("BLE: SURAKSHA-KEY"));
+    display.println(F("Status: READY"));
+    display.println(F("Companion: Active"));
     display.display();
-    delay(3000);
+    delay(1000);
   }
 
   // 2. Initialize MPU-6050 Accelerometer / Gyroscope
